@@ -53,6 +53,8 @@ class WebViewController(
     // 상태바(디스플레이 컷아웃 포함) 위쪽 inset과, 비운 영역을 칠할지 여부. 비우는 것은 항상 한다.
     private var topSafeAreaInset = 0
     private var topSafeAreaColored = false
+    // 컨테이너의 window 기준 위치. layout 때 갱신하고 다음 measure에서 쓴다.
+    private val containerLocation = IntArray(2)
     // 3버튼 내비게이션 바와 측면 컷아웃 크기. 제스처 핸들은 터치 대상이 아니라 0이다.
     private var sideSafeAreaInsets = Insets.NONE
     private var listener: ((WebViewEvent) -> Unit)? = eventListener
@@ -83,10 +85,17 @@ class WebViewController(
         checkMainThread()
         webView = WebView(context)
         topSafeAreaView = View(context).apply { visibility = View.GONE }
-        // safe area와 겹치는 크기는 컨테이너의 window 위치에 달려 있으므로 onLayout에서 직접 배치한다.
+        // safe area와 겹치는 크기는 컨테이너의 window 위치에 달려 있으므로 직접 measure·layout한다.
+        // measure와 layout이 같은 결과를 쓰게 해 WebView 크기가 레이아웃마다 바뀌지 않게 한다(스크롤·fixed 요소 깜박임 방지).
         containerView = object : FrameLayout(context) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val width = MeasureSpec.getSize(widthMeasureSpec)
+                val height = MeasureSpec.getSize(heightMeasureSpec)
+                setMeasuredDimension(width, height)
+                measureInsideSafeArea(width, height)
+            }
+
             override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-                super.onLayout(changed, left, top, right, bottom)
                 layoutInsideSafeArea(right - left, bottom - top)
             }
         }.apply {
@@ -330,35 +339,50 @@ class WebViewController(
         webView.destroy()
     }
 
-    /** inset이나 색이 바뀌면 띠 표시 여부를 갱신하고 다시 배치한다. 위치 계산은 [layoutInsideSafeArea]가 한다. */
+    /** inset이나 색이 바뀌면 띠 표시 여부를 갱신하고 다시 배치한다. 위치 계산은 [safeAreaFor]가 한다. */
     private fun updateSafeArea() {
         topSafeAreaView.visibility = if (topSafeAreaColored) View.VISIBLE else View.GONE
         containerView.requestLayout()
     }
 
+    /** 컨테이너 안에서 WebView가 놓일 영역. 각 값은 컨테이너가 safe area와 겹쳐서 비우는 크기다. */
+    private class SafeArea(val left: Int, val top: Int, val right: Int, val bottom: Int, val width: Int, val height: Int)
+
     /**
-     * 컨테이너가 safe area와 겹치는 만큼만 비우고 WebView를 배치한다.
-     * 풀스크린이면 상태바·3버튼 바·컷아웃을 피하고, safe area와 겹치지 않는 팝업은 컨테이너를 그대로 채운다.
-     * layoutParams를 바꾸지 않으므로 레이아웃을 다시 요청하지 않는다.
+     * 컨테이너가 safe area와 겹치는 만큼만 비운 영역을 계산한다.
+     * 풀스크린이면 상태바·3버튼 바·컷아웃을 피하고, safe area와 겹치지 않는 팝업은 컨테이너를 그대로 쓴다.
      */
-    private fun layoutInsideSafeArea(width: Int, height: Int) {
-        val (x, y) = IntArray(2).also(containerView::getLocationInWindow)
+    private fun safeAreaFor(width: Int, height: Int): SafeArea {
         val window = containerView.rootView
+        val x = containerLocation[0]
+        val y = containerLocation[1]
         val side = sideSafeAreaInsets
         val top = (topSafeAreaInset - y).coerceIn(0, height)
         val bottom = (side.bottom - (window.height - (y + height))).coerceIn(0, height - top)
         val left = (side.left - x).coerceIn(0, width)
         val right = (side.right - (window.width - (x + width))).coerceIn(0, width - left)
-        val webWidth = width - left - right
-        val webHeight = height - top - bottom
-        if (webView.measuredWidth != webWidth || webView.measuredHeight != webHeight) {
-            webView.measure(exactly(webWidth), exactly(webHeight))
+        return SafeArea(left, top, right, bottom, width - left - right, height - top - bottom)
+    }
+
+    /** 마지막으로 알려진 컨테이너 위치로 WebView와 띠를 한 번만 measure한다. */
+    private fun measureInsideSafeArea(width: Int, height: Int) {
+        val area = safeAreaFor(width, height)
+        webView.measure(exactly(area.width), exactly(area.height))
+        topSafeAreaView.measure(exactly(width), exactly(area.top))
+    }
+
+    /** 현재 위치로 다시 계산해, 위치가 바뀌어 크기가 달라졌을 때만 다시 measure하고 한 번만 layout한다. */
+    private fun layoutInsideSafeArea(width: Int, height: Int) {
+        containerView.getLocationInWindow(containerLocation)
+        val area = safeAreaFor(width, height)
+        if (webView.measuredWidth != area.width || webView.measuredHeight != area.height) {
+            webView.measure(exactly(area.width), exactly(area.height))
         }
-        webView.layout(left, top, left + webWidth, top + webHeight)
-        if (topSafeAreaView.visibility == View.VISIBLE) {
-            topSafeAreaView.measure(exactly(width), exactly(top))
-            topSafeAreaView.layout(0, 0, width, top)
+        webView.layout(area.left, area.top, area.left + area.width, area.top + area.height)
+        if (topSafeAreaView.measuredWidth != width || topSafeAreaView.measuredHeight != area.top) {
+            topSafeAreaView.measure(exactly(width), exactly(area.top))
         }
+        topSafeAreaView.layout(0, 0, width, area.top)
     }
 
     private fun exactly(size: Int) = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)

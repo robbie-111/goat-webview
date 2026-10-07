@@ -2,6 +2,7 @@ package com.goatwebview.sample
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.view.MotionEvent
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -62,7 +63,8 @@ private fun WebViewController.applySafeArea(preset: SafeArea) {
 }
 
 /**
- * webview-sdk 기능을 시험하는 화면. Load는 웹뷰를 숨긴 채 만들어 URL을 로드하고, Show는 그 웹뷰를 전체 화면으로 표시한다.
+ * webview-sdk 기능을 시험하는 화면. Load는 웹뷰를 숨긴 채 만들어 URL을 로드하고, Show는 그 웹뷰를 표시한다.
+ * Fullscreen은 설정 화면을 치우고 전체 화면에, Popup은 설정 화면 위에 마진을 두고 띄운다(바깥 설정 화면은 계속 조작 가능).
  * 표시 중 뒤로가기는 웹 기록이 있으면 웹에서 뒤로 가고, 없으면 웹뷰를 destroy한다.
  */
 @Composable
@@ -123,34 +125,8 @@ fun DemoScreen() {
     }
 
     Box(Modifier.fillMaxSize()) {
-        // 웹뷰는 inset을 직접 처리하므로 padding 없이 전체 화면에 둔다. Show 전에는 위의 설정 화면이 덮는다.
-        loadedUrl?.let { url ->
-            WebViewHost(
-                url = url,
-                visible = showing,
-                safeArea = safeArea,
-                scrollBounce = scrollBounce,
-                onCreated = { controller = it },
-                onEvent = { event ->
-                    when (event) {
-                        is WebViewEvent.PageStarted -> status = "Started ${event.url}"
-                        is WebViewEvent.PageFinished -> status = "Finished ${event.url} (${event.statusCode})"
-                        is WebViewEvent.LoadingErrorReceived -> status = "Error ${event.errorCode}: ${event.errorMessage}"
-                        is WebViewEvent.NavigationChanged -> {
-                            navigation = event
-                            event.url?.let { loadedUrl = it }
-                        }
-                        else -> Unit
-                    }
-                },
-                modifier = if (popup) {
-                    Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 96.dp)
-                } else {
-                    Modifier.fillMaxSize()
-                },
-            )
-        }
-        if (!showing) {
+        // 설정 화면이 아래, 웹뷰가 위. Popup이면 Show 중에도 설정 화면을 남겨 팝업 바깥에 보이게 한다.
+        if (!showing || popup) {
             Column(
                 Modifier
                     .fillMaxSize()
@@ -205,6 +181,33 @@ fun DemoScreen() {
                 Text(status, style = MaterialTheme.typography.bodySmall)
             }
         }
+        // 웹뷰는 inset을 직접 처리한다. Fullscreen이면 padding 없이 전체 화면, Popup이면 safe area와 겹치지 않는 마진을 둔다.
+        loadedUrl?.let { url ->
+            WebViewHost(
+                url = url,
+                visible = showing,
+                safeArea = safeArea,
+                scrollBounce = scrollBounce,
+                onCreated = { controller = it },
+                onEvent = { event ->
+                    when (event) {
+                        is WebViewEvent.PageStarted -> status = "Started ${event.url}"
+                        is WebViewEvent.PageFinished -> status = "Finished ${event.url} (${event.statusCode})"
+                        is WebViewEvent.LoadingErrorReceived -> status = "Error ${event.errorCode}: ${event.errorMessage}"
+                        is WebViewEvent.NavigationChanged -> {
+                            navigation = event
+                            event.url?.let { loadedUrl = it }
+                        }
+                        else -> Unit
+                    }
+                },
+                modifier = if (popup) {
+                    Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 96.dp)
+                } else {
+                    Modifier.fillMaxSize()
+                },
+            )
+        }
     }
 }
 
@@ -247,6 +250,10 @@ private class WebViewHostView(
 ) : FrameLayout(context), DefaultLifecycleObserver {
     val controller = WebViewController(context, WebViewConfig(), onEvent)
     private var released = false
+
+    // 숨김 상태(Load 후 Show 전)의 웹뷰가 아래 설정 화면의 터치를 가로채지 않게 한다.
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean =
+        !controller.isDestroyed && controller.view.isShown && super.dispatchTouchEvent(event)
 
     init {
         addView(controller.view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
