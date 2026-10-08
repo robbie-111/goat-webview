@@ -56,7 +56,8 @@ extension WebViewPlugin {
 }
 
 /// GoatWebViewSDK 기능을 시험하는 화면. Load는 웹뷰를 숨긴 채 만들어 URL을 로드하고, Show는 그 웹뷰를 표시한다.
-/// Fullscreen은 설정 화면을 치우고 전체 화면에, Popup은 설정 화면 위에 마진을 두고 띄운다(바깥 설정 화면은 계속 조작 가능).
+/// 설정 화면은 항상 아래에 두고, Fullscreen은 그 위 전체 화면에, Popup은 마진을 두고 띄운다(바깥 설정 화면은 계속 조작 가능).
+/// 웹뷰가 비운 상단 safe area(Top safe area color Off)에는 두 모드 모두 설정 화면이 그대로 보인다.
 /// iOS에는 시스템 뒤로가기가 없으므로 표시 중에는 Back 버튼을 둔다. 웹 기록이 있으면 웹에서 뒤로 가고, 없으면 웹뷰를 dispose한다.
 struct DemoView: View {
     @State private var input = startURL
@@ -74,10 +75,9 @@ struct DemoView: View {
 
     var body: some View {
         ZStack {
-            // 설정 화면이 아래, 웹뷰가 위. Popup이면 Show 중에도 설정 화면을 남겨 팝업 바깥에 보이게 한다.
-            if !showing || popup {
-                settings
-            }
+            // 설정 화면이 아래, 웹뷰가 위. Show 중에도 설정 화면을 남겨, 팝업 바깥과 웹뷰가 비운 상단 safe area에
+            // 설정 화면이 그대로 보이게 한다(Fullscreen·Popup 동일).
+            settings
             // 웹뷰는 safe area를 직접 처리한다. Fullscreen이면 화면 전체, Popup이면 safe area와 겹치지 않는 마진을 둔다.
             if let loadedURL {
                 WebViewHost(
@@ -97,8 +97,6 @@ struct DemoView: View {
                 backButton
             }
         }
-        // Android 샘플의 창 배경(#F4F6FA). Fullscreen에서 비워 둔 safe area에 보인다.
-        .background(Color(red: 0xF4 / 255, green: 0xF6 / 255, blue: 0xFA / 255).ignoresSafeArea())
     }
 
     private var settings: some View {

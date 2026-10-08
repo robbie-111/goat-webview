@@ -33,7 +33,7 @@ export ANDROID_HOME="/path/to/Android/sdk"
 
 - 프리셋과 스위치는 웹뷰가 있으면 즉시 적용하고, 웹뷰를 만들 때도 적용합니다. 상단 색 **Off**는 `setTopSafeAreaColor`를 호출하지 않으므로 SDK 기본값(상태바 영역을 투명하게 비우고 그 아래부터 웹뷰)이 됩니다. 이미 색을 적용한 웹뷰에는 다음 Load부터 반영됩니다.
 - **Corner radius**는 웹 콘텐츠 영역(safe area를 피해 웹뷰가 놓인 사각형) 네 모서리를 둥글게 자릅니다. Off(0), 12, 24, Mixed(위쪽 두 모서리만 24, 바텀시트 모양) 프리셋이며 값은 dp입니다. SDK는 px를 받으므로 샘플이 density를 곱해 넘깁니다(iOS 샘플은 같은 값을 pt로 넘깁니다). 상단 띠는 자르지 않으므로 Fullscreen에서도 상태바 아래 웹 모서리가 둥글게 보입니다. Fullscreen의 아래 모서리는 웹이 제스처 핸들 뒤까지 채우면 물리 화면 모서리와 겹칩니다.
-- **Display**는 웹뷰를 화면 전체(Fullscreen) 또는 설정 화면 위에 좌우 24dp·상하 96dp 마진을 둔 팝업(Popup)으로 엽니다. Fullscreen은 설정 화면을 치우고, 비워 둔 safe area에는 Activity 창 배경(`styles.xml`의 `#F4F6FA`)이 보입니다. Popup은 설정 화면이 그대로 보이고 조작할 수 있어, 상단 색·바운스·캐시를 바꾸면 떠 있는 웹뷰에 바로 반영됩니다. 팝업은 safe area와 겹치지 않으므로 상단 띠 없이 웹뷰가 팝업을 그대로 채웁니다.
+- **Display**는 웹뷰를 화면 전체(Fullscreen) 또는 설정 화면 위에 좌우 24dp·상하 96dp 마진을 둔 팝업(Popup)으로 엽니다. 설정 화면은 두 모드 모두 웹뷰 아래에 남으므로, 웹뷰가 비운 상단 safe area(Top safe area color Off)에는 Fullscreen에서도 Popup처럼 설정 화면이 보입니다. Popup은 바깥 설정 화면을 조작할 수 있어, 상단 색·바운스·캐시를 바꾸면 떠 있는 웹뷰에 바로 반영됩니다. 팝업은 safe area와 겹치지 않으므로 상단 띠 없이 웹뷰가 팝업을 그대로 채웁니다.
 - **Clear Cache**는 웹뷰가 있으면 `clearCache(true)`, 없으면 `WebViewCache.clear(context)`를 호출합니다.
 - 화면 아래 상태 문구에는 `PageStarted`, `PageFinished`(HTTP 상태 포함), `LoadingErrorReceived`, 캐시 결과를 표시합니다.
 

@@ -79,7 +79,8 @@ private fun WebViewController.applyCornerRadius(preset: CornerRadius, density: F
 
 /**
  * webview-sdk 기능을 시험하는 화면. Load는 웹뷰를 숨긴 채 만들어 URL을 로드하고, Show는 그 웹뷰를 표시한다.
- * Fullscreen은 설정 화면을 치우고 전체 화면에, Popup은 설정 화면 위에 마진을 두고 띄운다(바깥 설정 화면은 계속 조작 가능).
+ * 설정 화면은 항상 아래에 두고, Fullscreen은 그 위 전체 화면에, Popup은 마진을 두고 띄운다(바깥 설정 화면은 계속 조작 가능).
+ * 웹뷰가 비운 상단 safe area(Top safe area color Off)에는 두 모드 모두 설정 화면이 그대로 보인다.
  * 표시 중 뒤로가기는 웹 기록이 있으면 웹에서 뒤로 가고, 없으면 웹뷰를 destroy한다.
  */
 @Composable
@@ -142,74 +143,73 @@ fun DemoScreen() {
     }
 
     Box(Modifier.fillMaxSize()) {
-        // 설정 화면이 아래, 웹뷰가 위. Popup이면 Show 중에도 설정 화면을 남겨 팝업 바깥에 보이게 한다.
-        if (!showing || popup) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
-                    .safeDrawingPadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text("Goat WebView", style = MaterialTheme.typography.titleLarge)
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("URL") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                )
-                Text("Top safe area color")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SafeArea.entries.forEach { preset ->
-                        FilterChip(
-                            selected = safeArea == preset,
-                            onClick = {
-                                safeArea = preset
-                                controller?.applySafeArea(preset)
-                            },
-                            label = { Text(preset.name) },
-                        )
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Scroll bounce", Modifier.weight(1f))
-                    Switch(
-                        checked = scrollBounce,
-                        onCheckedChange = {
-                            scrollBounce = it
-                            controller?.setScrollBounceEnabled(it)
+        // 설정 화면이 아래, 웹뷰가 위. Show 중에도 설정 화면을 남겨, 팝업 바깥과 웹뷰가 비운 상단 safe area에
+        // 설정 화면이 그대로 보이게 한다(Fullscreen·Popup 동일).
+        Column(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .safeDrawingPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Goat WebView", style = MaterialTheme.typography.titleLarge)
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("URL") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+            )
+            Text("Top safe area color")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SafeArea.entries.forEach { preset ->
+                    FilterChip(
+                        selected = safeArea == preset,
+                        onClick = {
+                            safeArea = preset
+                            controller?.applySafeArea(preset)
                         },
+                        label = { Text(preset.name) },
                     )
                 }
-                Text("Corner radius")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CornerRadius.entries.forEach { preset ->
-                        FilterChip(
-                            selected = cornerRadius == preset,
-                            onClick = {
-                                cornerRadius = preset
-                                controller?.applyCornerRadius(preset, density)
-                            },
-                            label = { Text(preset.label) },
-                        )
-                    }
-                }
-                Text("Display")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = !popup, onClick = { popup = false }, label = { Text("Fullscreen") })
-                    FilterChip(selected = popup, onClick = { popup = true }, label = { Text("Popup") })
-                }
-                OutlinedButton(onClick = ::clearCache, modifier = Modifier.fillMaxWidth()) { Text("Clear Cache") }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = ::load, modifier = Modifier.weight(1f)) { Text("Load") }
-                    Button(onClick = ::show, modifier = Modifier.weight(1f)) { Text("Show") }
-                }
-                Text(status, style = MaterialTheme.typography.bodySmall)
             }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Scroll bounce", Modifier.weight(1f))
+                Switch(
+                    checked = scrollBounce,
+                    onCheckedChange = {
+                        scrollBounce = it
+                        controller?.setScrollBounceEnabled(it)
+                    },
+                )
+            }
+            Text("Corner radius")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CornerRadius.entries.forEach { preset ->
+                    FilterChip(
+                        selected = cornerRadius == preset,
+                        onClick = {
+                            cornerRadius = preset
+                            controller?.applyCornerRadius(preset, density)
+                        },
+                        label = { Text(preset.label) },
+                    )
+                }
+            }
+            Text("Display")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = !popup, onClick = { popup = false }, label = { Text("Fullscreen") })
+                FilterChip(selected = popup, onClick = { popup = true }, label = { Text("Popup") })
+            }
+            OutlinedButton(onClick = ::clearCache, modifier = Modifier.fillMaxWidth()) { Text("Clear Cache") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = ::load, modifier = Modifier.weight(1f)) { Text("Load") }
+                Button(onClick = ::show, modifier = Modifier.weight(1f)) { Text("Show") }
+            }
+            Text(status, style = MaterialTheme.typography.bodySmall)
         }
         // 웹뷰는 inset을 직접 처리한다. Fullscreen이면 padding 없이 전체 화면, Popup이면 safe area와 겹치지 않는 마진을 둔다.
         loadedUrl?.let { url ->
