@@ -163,7 +163,7 @@ class WebViewIntegrationTest {
     @Test fun scrollBounceFollowsWebViewDefaultAndCanBeToggled() {
         create()
         main {
-            val webView = (content() as ViewGroup).getChildAt(0)
+            val webView = webView()
             assertEquals(View.OVER_SCROLL_IF_CONTENT_SCROLLS, webView.overScrollMode)
             controller.setScrollBounceEnabled(false)
             assertEquals(View.OVER_SCROLL_NEVER, webView.overScrollMode)
@@ -324,6 +324,31 @@ class WebViewIntegrationTest {
         }
     }
 
+    @Test fun fallbackCoversWebViewUntilLoadedAndClosesFromButton() {
+        create(WebViewConfig(requestInterceptor = ::intercept))
+        // 처음에는 웹뷰를 숨기고 폴백 화면(로딩 + 닫기)을 보인다.
+        main {
+            assertEquals(View.INVISIBLE, webView().visibility)
+            assertEquals(FallbackView.State.LOADING, fallback().state)
+        }
+        main { controller.loadUrl("$ORIGIN/plain") }
+        awaitLoaded("/plain")
+        main {
+            assertEquals(View.VISIBLE, webView().visibility)
+            assertEquals(FallbackView.State.LOADED, fallback().state)
+        }
+        // 메인 문서 HTTP 400 이상이면 로드가 끝나도 웹뷰를 숨기고 실패 화면을 보인다.
+        main { controller.loadUrl("$ORIGIN/error") }
+        awaitLoaded("/error")
+        main {
+            assertEquals(View.INVISIBLE, webView().visibility)
+            assertEquals(FallbackView.State.FAILED, fallback().state)
+            fallback().closeButton.performClick()
+        }
+        assertTrue(controller.isDestroyed)
+        assertEquals(WebViewEvent.Closed, events.last())
+    }
+
     @Test fun publicCallsRequireMainThreadAndRejectNonHttpUrls() {
         create()
         assertThrows(IllegalStateException::class.java) { controller.pause() }
@@ -367,6 +392,9 @@ class WebViewIntegrationTest {
     // 컨테이너의 첫 자식은 WebView를 담은 웹 콘텐츠 영역(safe area를 피해 배치, 라운딩 대상)이다.
     private fun content() = (controller.view as ViewGroup).getChildAt(0)
     private fun band() = (controller.view as ViewGroup).getChildAt(1)
+    // 웹 콘텐츠 영역 안: 폴백 화면이 아래(0), WebView가 위(1)다.
+    private fun fallback() = (content() as ViewGroup).getChildAt(0) as FallbackView
+    private fun webView() = (content() as ViewGroup).getChildAt(1)
     private fun js(script: String): String {
         val latch = CountDownLatch(1)
         val result = AtomicReference<String>()

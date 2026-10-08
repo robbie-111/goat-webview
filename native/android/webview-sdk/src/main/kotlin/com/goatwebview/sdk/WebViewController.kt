@@ -44,6 +44,8 @@ import androidx.webkit.ScriptHandler
  * WebView는 항상 상단 safe area(상태바·컷아웃) 중 컨테이너와 겹치는 부분을 비우고 그 아래부터 채운다.
  * safe area와 겹치지 않는 팝업형 컨테이너는 어느 방향으로도 줄이지 않는다.
  * WebView는 3버튼 내비게이션 바와 측면 디스플레이 컷아웃 중 컨테이너와 겹치는 만큼만 피하고, 제스처 내비게이션 핸들 뒤까지는 채운다.
+ * 웹뷰 아래에는 폴백 화면(로딩·실패 표시와 닫기 버튼)이 깔려 있다. 메인 문서 로드가 실패 없이 끝나야 웹뷰가 드러나며,
+ * 네트워크 오류나 HTTP 400 이상이면 웹뷰를 숨기고 실패 화면을 보인다. 닫기 버튼은 웹뷰를 해제하고 [WebViewEvent.Closed]를 보낸다.
  * JavaScript 평가 결과는 Android WebView가 반환한 JSON 문자열이며 오류/undefined는 null일 수 있다.
  */
 @MainThread
@@ -58,6 +60,11 @@ class WebViewController(
     // WebView를 담아 safe area를 피한 자리에 놓이는 웹 콘텐츠 영역. 모서리 라운딩은 이 뷰를 자른다.
     private val contentView: FrameLayout
     private val topSafeAreaView: View
+    // 로드 전·실패 시 웹뷰 아래에 보이는 화면(닫기 버튼). 웹뷰는 메인 문서 로드가 실패 없이 끝나야 드러난다.
+    private val fallbackView: FallbackView
+    // 지금 메인 프레임 탐색을 실패로 봤는지(네트워크·HTTP 오류). 켜져 있으면 로드가 끝나도 웹뷰를 드러내지 않고,
+    // 다음 탐색이 시작되면 끈다.
+    private var currentNavigationFailed = false
     // 상태바(디스플레이 컷아웃 포함) 위쪽 inset과, 비운 영역을 칠할지 여부. 비우는 것은 항상 한다.
     private var topSafeAreaInset = 0
     private var topSafeAreaColored = false
@@ -93,7 +100,13 @@ class WebViewController(
 
     init {
         checkMainThread()
-        webView = WebView(context)
+        webView = WebView(context).apply { visibility = View.INVISIBLE }
+        // 닫기 버튼은 SDK가 웹뷰를 해제한 뒤 Closed를 보낸다(destroy가 listener를 비우므로 먼저 잡아 둔다).
+        fallbackView = FallbackView(context) {
+            val callback = listener
+            destroy()
+            callback?.invoke(WebViewEvent.Closed)
+        }
         topSafeAreaView = View(context).apply { visibility = View.GONE }
         contentView = object : FrameLayout(context) {
             // 모서리 반지름이 서로 다른데 outline path로 자를 수 없는 API 33 미만에서만 쓴다(가장자리 안티앨리어싱 없음).
@@ -113,6 +126,7 @@ class WebViewController(
                     }
                 }
             }
+            addView(fallbackView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             addView(webView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         }
         // safe area와 겹치는 크기는 컨테이너의 window 위치에 달려 있으므로 직접 measure·layout한다.
@@ -181,11 +195,15 @@ class WebViewController(
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 mainFrameStatus = 200
+                currentNavigationFailed = false
+                // 웹뷰가 한 번 보인 뒤의 탐색 중에는 이전 페이지를 계속 보여 준다.
+                if (webView.visibility != View.VISIBLE) fallbackView.state = FallbackView.State.LOADING
                 emit(WebViewEvent.PageStarted(url))
                 emitNavigation()
             }
 
             override fun onPageFinished(view: WebView, url: String) {
+                if (!isDestroyed && !currentNavigationFailed) reveal()
                 emit(WebViewEvent.PageFinished(url, mainFrameStatus))
                 emitNavigation()
             }
@@ -200,6 +218,7 @@ class WebViewController(
                 error: WebResourceError,
             ) {
                 if (request.isForMainFrame) {
+                    showFailure()
                     emit(WebViewEvent.LoadingErrorReceived(
                         WebViewEvent.LoadingErrorReceived.Kind.NETWORK,
                         error.errorCode,
@@ -214,8 +233,11 @@ class WebViewController(
                 request: WebResourceRequest,
                 errorResponse: WebResourceResponse,
             ) {
-                // HTTP 오류 문서도 로드는 끝나므로 PageFinished의 statusCode로 알린다.
-                if (request.isForMainFrame) mainFrameStatus = errorResponse.statusCode
+                // HTTP 오류 문서도 로드는 끝나므로 PageFinished의 statusCode로 알리고, 웹뷰 대신 실패 화면을 보인다.
+                if (request.isForMainFrame) {
+                    mainFrameStatus = errorResponse.statusCode
+                    if (errorResponse.statusCode >= 400) showFailure()
+                }
             }
 
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
@@ -432,6 +454,18 @@ class WebViewController(
             topSafeAreaView.measure(exactly(width), exactly(area.top))
         }
         topSafeAreaView.layout(0, 0, width, area.top)
+    }
+
+    private fun reveal() {
+        webView.visibility = View.VISIBLE
+        fallbackView.state = FallbackView.State.LOADED
+    }
+
+    private fun showFailure() {
+        if (isDestroyed) return
+        currentNavigationFailed = true
+        webView.visibility = View.INVISIBLE
+        fallbackView.state = FallbackView.State.FAILED
     }
 
     private fun hasUniformCorners() = cornerRadii.all { it == cornerRadii[0] }

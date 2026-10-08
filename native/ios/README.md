@@ -84,7 +84,6 @@ plugin.dispose()
 | `setScrollBounceEnabled(_:)` | 스크롤 끝에서 튕기는 효과(`scrollView.bounces`). 기본은 켜짐 |
 | `setRoundCornerRadius(topLeft:topRight:bottomLeft:bottomRight:)` | 웹 콘텐츠 영역(safe area를 피해 폴백 화면·웹뷰를 담은 `contentView`) 네 모서리 반지름(pt). 상단 띠와 컨테이너는 자르지 않으므로 풀스크린에서도 상태바 아래 웹 모서리가 보입니다. 음수는 0, 모두 0이면 자르지 않음. 같으면 `layer.cornerRadius`, 다르면 `CAShapeLayer` 마스크. Android와 같은 원시 타입 시그니처(Android는 px) |
 | `setSuspended(_:)` | 페이지의 미디어 재생을 멈추거나 다시 시작합니다. JavaScript 실행은 멈추지 않습니다 |
-| `showFallback()` | 호스트가 페이지를 실패로 판단했을 때(예: 준비 신호 타임아웃) 웹뷰를 숨기고 실패 화면을 보입니다. 진행 중인 로드가 끝나도 유지되고, 다음 탐색이 시작되면 풀립니다. 오류 콜백은 보내지 않습니다 |
 | `dispose()` | 로드를 멈추고 뷰를 떼며 핸들러를 해제합니다. 여러 번 불러도 안전하고 이후 콜백은 없습니다. 부르지 않고 놓아도 해제될 때 로드를 멈추고 뷰를 뗍니다 |
 | `WebViewPlugin.setForwardWebConsoleToNativeOutput(_:)` (static) | 모든 웹뷰의 웹 콘솔 로그(`console.log/info/warn/error/debug`)를 `os.Logger`(subsystem `GoatWebView`, category `console`)에 레벨별로 출력할지 정합니다. 기본 false이며 이미 만든 웹뷰에도 바로 적용됩니다. 웹 콘솔에는 토큰 등이 포함될 수 있습니다 |
 | `WebViewCache.clear(completionHandler:)` (static) | 앱의 모든 웹뷰가 공유하는 디스크·메모리 캐시를 비웁니다. 쿠키와 웹 저장소는 유지합니다 |
@@ -115,7 +114,7 @@ DEBUG 빌드에서는 iOS 16.4 이상에서 Safari 웹 검사기로 볼 수 있�
 | `_CWebViewPlugin_CanGoBack`, `CanGoForward`, `GoBack`, `GoForward`, `Reload` | `canGoBack`, `canGoForward`, `goBack()`, `goForward()`, `reload()` |
 | `_CWebViewPlugin_SetSuspended` | `setSuspended(_:)` |
 | `_CWebViewPlugin_SetScrollBounceEnabled`, `_CWebViewPlugin_ClearCache` | `setScrollBounceEnabled(_:)`, `WebViewCache.clear(completionHandler:)`(캐시만 비움) |
-| 없음 | `stopLoading()`, `showFallback()`, `setTopSafeAreaColor(r:g:b:a:)`, `setForwardWebConsoleToNativeOutput(_:)` |
+| 없음 | `stopLoading()`, `setTopSafeAreaColor(r:g:b:a:)`, `setForwardWebConsoleToNativeOutput(_:)` |
 
 | upstream `UnitySendMessage` 메서드 | `WebViewPluginDelegate` |
 | --- | --- |
@@ -150,7 +149,8 @@ DEBUG 빌드에서는 iOS 16.4 이상에서 Safari 웹 검사기로 볼 수 있�
 | 허용 출처가 비면 브리지 없음 | `allowedOrigins: []`이면 브리지 없음, `nil`이면 출처 제한 없음(upstream 호환) |
 | `MessageBridgeUnavailable`, `requestInterceptor`, `documentStartScripts`, `currentUrl`, `isDestroyed` | 없음 |
 | `setTopSafeAreaColor(r, g, b, a)`, 상단 safe area 항상 비움, 3버튼 바·측면 컷아웃 회피 | `setTopSafeAreaColor(r:g:b:a:)` (같은 원시 타입 시그니처), 상단 safe area 항상 비움, 좌우 safe area 회피. 홈 인디케이터 뒤는 채움(Android 제스처 핸들과 같음) |
-| 없음 | 폴백 화면과 `webViewPluginDidClose`, `showFallback`, `setMargins` |
+| 폴백 화면, `Closed` 이벤트 | 폴백 화면, `webViewPluginDidClose` (같은 동작. Android는 뒤로·앞으로 캐시의 HTTP 오류 문서를 다시 실패로 보지 않음) |
+| 없음 | `setMargins` |
 
 ## 폴백 화면
 
@@ -160,7 +160,7 @@ DEBUG 빌드에서는 iOS 16.4 이상에서 Safari 웹 검사기로 볼 수 있�
 | --- | --- | --- |
 | 로딩 | 웹뷰가 숨겨진 상태에서 탐색이 시작될 때(처음 로드 포함) | 숨김 |
 | 로드됨 | 메인 문서 로드가 실패 없이 끝났을 때 | 보임 |
-| 실패 | 메인 문서 HTTP 400 이상, 로드 실패, 잘못된 URL, 웹 콘텐츠 프로세스 종료, `showFallback()`, 이어지는 탐색 없이 멈춘 로드(`stopLoading`, `window.stop`) | 숨김 |
+| 실패 | 메인 문서 HTTP 400 이상, 로드 실패, 잘못된 URL, 웹 콘텐츠 프로세스 종료, 이어지는 탐색 없이 멈춘 로드(`stopLoading`, `window.stop`) | 숨김 |
 
 - 웹뷰가 한 번 보인 뒤의 탐색 중에는 이전 페이지를 계속 보여 주고, 실패하면 다시 숨깁니다.
 - 실패 판정은 다음 탐색이 시작될 때까지 유지되어, 그 사이 로드가 끝나도 웹뷰를 드러내지 않습니다. 다음 탐색이 성공하면 웹뷰가 다시 드러납니다.
@@ -257,7 +257,7 @@ Unity 헤더를 쓰지 않으므로 SDK 빌드·테스트에 그대로 포함됩
 | `goatwebview_set_round_corner_radius(gameObjectName, tl, tr, bl, br)` | Unity 화면 픽셀을 `contentScaleFactor`로 나눠 pt로 바꿔 `setRoundCornerRadius`를 부릅니다 |
 | `goatwebview_get_url(gameObjectName)` | 현재 URL을 `strdup`한 문자열로 돌려줍니다(C#이 해제). 없으면 NULL |
 | `goatwebview_set_scroll_bounce_enabled`, `goatwebview_clear_cache()`, `goatwebview_set_forward_web_console_to_native_output(bool)` | `setScrollBounceEnabled`, `WebViewCache.clear`, `setForwardWebConsoleToNativeOutput` |
-| `goatwebview_set_visibility`, `set_top_safe_area_color`, `set_suspended`, `show_fallback` | 같은 이름의 SDK API |
+| `goatwebview_set_visibility`, `set_top_safe_area_color`, `set_suspended` | 같은 이름의 SDK API |
 
 이벤트는 `UnitySendMessage(gameObjectName, 메서드 이름, JSON)`으로 보냅니다. 메서드 이름과 JSON 필드는 Android `unity-wrapper`(UniWebView 이벤트 이름)와 같으며, 그 GameObject의 컴포넌트가 아래 메서드를 `string` 인자 하나로 받습니다. 값이 없는 필드는 `null`입니다.
 

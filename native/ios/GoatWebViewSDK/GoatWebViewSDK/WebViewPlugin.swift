@@ -59,7 +59,7 @@ public final class WebViewPlugin: NSObject {
     private(set) var fallbackView: FallbackView?
     private var navigationHandler: NavigationHandler?
     private let allowedOrigins: Set<String>?
-    // 지금 메인 프레임 탐색을 실패로 봤는지(HTTP 오류, 로드 실패, showFallback()). 켜져 있으면 로드가 끝나도
+    // 지금 메인 프레임 탐색을 실패로 봤는지(HTTP 오류, 로드 실패). 켜져 있으면 로드가 끝나도
     // 웹뷰를 드러내지 않고, 다음 탐색이 시작되면 끈다.
     private var currentNavigationFailed = false
     // 지금 탐색이 메인 문서 응답을 받았는지와, 받은 응답이 HTTP 오류라면 그 상태 코드
@@ -256,16 +256,6 @@ public final class WebViewPlugin: NSObject {
     /// 미디어 재생을 멈추거나 다시 시작한다 (upstream SetSuspended).
     public func setSuspended(_ suspended: Bool) {
         webView?.setAllMediaPlaybackSuspended(suspended)
-    }
-
-    // MARK: - Fallback
-
-    /// 웹뷰를 숨기고 폴백 실패 화면(닫기 버튼)을 드러낸다.
-    /// 호스트가 페이지를 실패로 판단했을 때 쓴다(예: 준비 신호 타임아웃).
-    /// 로드 중인 탐색이 끝나도 되돌리지 않으며, 다음 탐색이 시작되면 풀린다.
-    public func showFallback() {
-        guard webView != nil else { return }
-        showFailure()
     }
 
     // MARK: - Dispose

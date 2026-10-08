@@ -25,4 +25,7 @@ sealed interface WebViewEvent {
 
     data class MessageReceived(val message: String, val origin: String) : WebViewEvent
     data class MessageBridgeUnavailable(val reason: String) : WebViewEvent
+
+    /** 폴백 화면의 닫기 버튼으로 SDK가 웹뷰를 해제한 뒤 한 번 보낸다. 이후 이벤트는 없다(iOS webViewPluginDidClose). */
+    data object Closed : WebViewEvent
 }

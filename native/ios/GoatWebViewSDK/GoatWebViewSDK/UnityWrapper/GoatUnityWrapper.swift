@@ -311,10 +311,3 @@ public func goatwebview_set_suspended(_ gameObjectName: UnsafePointer<CChar>?, _
         GoatUnityWrapper.wrapper(gameObjectName)?.plugin.setSuspended(suspended)
     }
 }
-
-@_cdecl("goatwebview_show_fallback")
-public func goatwebview_show_fallback(_ gameObjectName: UnsafePointer<CChar>?) {
-    MainActor.assumeIsolated {
-        GoatUnityWrapper.wrapper(gameObjectName)?.plugin.showFallback()
-    }
-}

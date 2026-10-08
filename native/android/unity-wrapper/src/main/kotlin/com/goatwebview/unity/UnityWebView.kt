@@ -165,6 +165,8 @@ class UnityWebView internal constructor(
             }
             is WebViewEvent.MessageReceived ->
                 sendMessage("OnMessageReceived", "message" to event.message, "origin" to event.origin)
+            // 폴백 화면 닫기 버튼으로 코어가 이미 해제했다. iOS 래퍼처럼 Unity에는 보내지 않고 이후 호출을 무시한다.
+            WebViewEvent.Closed -> controller = null
             is WebViewEvent.MessageBridgeUnavailable -> sendMessage("OnMessageBridgeUnavailable", "reason" to event.reason)
         }
     }

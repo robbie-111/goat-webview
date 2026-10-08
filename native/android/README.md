@@ -71,7 +71,8 @@ native/android/
 - WebView는 safe area 중 컨테이너와 실제로 겹치는 만큼만 비웁니다. 상단은 상태바·디스플레이 컷아웃, 하단·좌우는 3버튼 내비게이션 바·측면 컷아웃이며, 제스처 핸들 뒤는 채웁니다. 풀스크린이면 이 영역을 피하고, 마진을 준 팝업처럼 safe area와 겹치지 않는 컨테이너는 어느 방향으로도 줄이지 않습니다. 상태바 뒤까지 덮는 옵션은 없습니다.
 - `setTopSafeAreaColor(r, g, b, a)`(각 0..1)는 비워 둔 영역의 색만 정합니다. 호출하지 않거나 `a`가 0이면 칠하지 않아 투명합니다. 하단 내비게이션 바와 좌우는 칠하지 않습니다. iOS `WebViewPlugin.setTopSafeAreaColor(r:g:b:a:)`와 같은 원시 타입 시그니처라 Unity C#의 `Color`를 그대로 넘길 수 있습니다. 상태바 아이콘 색은 호스트(Activity)가 정합니다. iOS SDK는 아직 이전 동작(호출하지 않거나 `a`가 0이면 상태바 뒤까지 채움)이며 같은 규칙으로 맞출 예정입니다.
 - 풀스크린 WebView는 3버튼 내비게이션 바(가로 모드에서는 측면 바)와 측면 디스플레이 컷아웃만큼 비켜 섭니다. 제스처 내비게이션에서는 핸들 뒤까지 채웁니다(iOS 홈 인디케이터와 같음). `tappableElement` inset을 쓰므로 내비게이션 모드를 바꾸면 바로 반영됩니다. 비워진 바 뒤쪽은 칠하지 않으며, 3버튼 바에는 시스템 대비 스크림이 그려집니다.
-- 이벤트(`WebViewEvent`) 이름은 UniWebView 이벤트에서 `On`을 뺀 것입니다. `PageStarted`, `PageFinished(url, statusCode)`, `LoadingErrorReceived`(네트워크·렌더러), `MessageReceived`, `NavigationChanged`, `MessageBridgeUnavailable`이 있습니다. 메인 문서의 HTTP 오류는 별도 이벤트 없이 `PageFinished.statusCode`로 전달합니다.
+- 이벤트(`WebViewEvent`) 이름은 UniWebView 이벤트에서 `On`을 뺀 것입니다. `PageStarted`, `PageFinished(url, statusCode)`, `LoadingErrorReceived`(네트워크·렌더러), `MessageReceived`, `NavigationChanged`, `MessageBridgeUnavailable`, `Closed`(폴백 화면 닫기 버튼으로 해제됨)가 있습니다. 메인 문서의 HTTP 오류는 별도 이벤트 없이 `PageFinished.statusCode`로 전달합니다.
+- **폴백 화면**(iOS와 같음): 웹 콘텐츠 영역 안에서 WebView 아래에 깔리는 네이티브 화면입니다(테마 `colorBackground`, 가운데 로딩 표시 또는 경고 아이콘, 오른쪽 위 48dp 닫기 버튼). WebView는 처음에 숨겨져 있고 메인 문서 로드가 실패 없이 끝나면(`onPageFinished`) 드러나 폴백을 덮습니다. 메인 문서의 네트워크 오류나 HTTP 400 이상이면 로드가 끝나도 WebView를 숨기고 실패 화면을 보이며, 다음 탐색이 시작되면 풀립니다. 한 번 보인 뒤의 탐색 중에는 이전 페이지를 계속 보여 줍니다. 닫기 버튼은 SDK가 웹뷰를 `destroy`한 뒤 `Closed`를 보냅니다. iOS와 달리 뒤로·앞으로 캐시에서 복원한 HTTP 오류 문서는 다시 실패로 판단하지 않습니다.
 - `setScrollBounceEnabled(enabled)`는 오버스크롤 효과를 켜고 끕니다(기본 켜짐, Android 기본 동작). `clearCache(includeDiskFiles)`는 앱의 모든 WebView가 공유하는 리소스 캐시를 비웁니다. 웹뷰를 만들기 전에는 `WebViewCache.clear(context)`를 씁니다.
 - `setRoundCornerRadius(topLeft, topRight, bottomLeft, bottomRight)`(px)는 웹 콘텐츠 영역(WebView를 담아 safe area를 피해 배치한 내부 뷰) 네 모서리를 둥글게 자릅니다. 상단 safe area 띠와 바깥 컨테이너는 자르지 않으므로 풀스크린에서도 상태바 아래 웹 모서리가 보입니다. 음수는 0, 모두 0이면 자르지 않습니다. 네 값이 같으면 outline 둥근 사각형, 다르면 API 33 이상은 outline path, 그 미만은 `clipPath`(가장자리 안티앨리어싱 없음)로 자릅니다. iOS와 같은 원시 타입 시그니처입니다(iOS는 pt).
 - 웹 콘솔 로그는 이벤트로 보내지 않습니다. 토큰 등이 포함될 수 있어 기본으로는 출력하지 않습니다. `WebViewController.setForwardWebConsoleToNativeOutput(true)`(static)이면 모든 웹뷰의 로그를 logcat `GoatWebView` 태그에 레벨별(`Log.e`/`w`/`d`/`i`)로 출력합니다.
@@ -94,6 +95,7 @@ native/android/
 - 탐색 상태는 UniWebView처럼 이벤트 없이 `canGoBack()`, `canGoForward()`, `getUrl()`로 조회합니다. WebView는 UI 스레드에서만 접근할 수 있으므로 래퍼가 코어 `NavigationChanged`의 마지막 값을 보관하고, Unity 스레드에서 바로 반환합니다. `pushState` 같은 문서 내 이동도 반영됩니다.
 - UnitySendMessage는 이름으로 GameObject를 찾으므로 이름은 씬에서 고유해야 하고 생성 후 바꾸지 않습니다.
 - `setScrollBounceEnabled(bool)`, `clearCache(bool includeDiskFiles)`, `setRoundCornerRadius(tl, tr, bl, br)`(px)는 코어의 같은 메서드를 호출합니다. 웹뷰가 없을 때는 `UnityWebView.clearSharedCache()`(static, 어느 스레드에서나 호출 가능)로 앱 공용 캐시를 비웁니다. 이벤트를 받을 GameObject가 없으므로 실패는 logcat에만 남습니다.
+- 폴백 화면 닫기 버튼으로 코어가 웹뷰를 해제하면(`Closed`) 이후 호출은 무시하며, iOS 래퍼처럼 Unity에는 보내지 않습니다.
 - 웹 콘솔 로그는 이벤트로 보내지 않습니다. `UnityWebView.setForwardWebConsoleToNativeOutput(true)`(static, 기본 false)는 코어의 같은 설정에 위임합니다.
 - 코어에서 발생한 잘못된 호출 예외는 앱을 종료하지 않고 `LoadingErrorReceived`(`kind` = `INVALID_CALL`)로 전달합니다. 잘못된 출처 설정은 생성자에서 예외로 알립니다. `destroy` 이후의 호출은 무시합니다.
 

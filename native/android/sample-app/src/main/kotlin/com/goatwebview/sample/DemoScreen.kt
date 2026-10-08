@@ -225,6 +225,8 @@ fun DemoScreen() {
                         is WebViewEvent.PageStarted -> status = "Started ${event.url}"
                         is WebViewEvent.PageFinished -> status = "Finished ${event.url} (${event.statusCode})"
                         is WebViewEvent.LoadingErrorReceived -> status = "Error ${event.errorCode}: ${event.errorMessage}"
+                        // 폴백 화면의 닫기 버튼으로 SDK가 웹뷰를 해제했다.
+                        WebViewEvent.Closed -> close()
                         is WebViewEvent.NavigationChanged -> {
                             navigation = event
                             event.url?.let { loadedUrl = it }
