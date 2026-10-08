@@ -1,0 +1,18 @@
+.DS_Store
+**/.gradle/
+**/.kotlin/
+**/build/
+**/local.properties
+**/.idea/
+*.iml
+captures/
+**/DerivedData/
+**/xcuserdata/
+*.xcuserstate
+*.xcresult/
+
+# Windows (WebView2) 빌드 산출물과 NuGet 패키지
+native/windows/bin/
+native/windows/packages/
+native/windows/.vs/
+native/windows/nuget.exe

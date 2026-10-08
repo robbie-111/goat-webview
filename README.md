@@ -4,7 +4,7 @@
 
 Android와 iOS를 중심으로 기존 구현을 정리하고, Android Studio와 Xcode에서 Unity 없이 같은 네이티브 웹뷰 구현을 개발·검증할 수 있는 환경을 만드는 것이 목표입니다.
 
-> Android의 Kotlin 코어·Compose 샘플과 iOS의 Swift 코어·SwiftUI 샘플을 구현했습니다. 실행 방법은 [Android README](native/android/README.md), [iOS README](native/ios/README.md)를 참고하세요. Windows Editor용 WebView2 플러그인과 macOS Editor용 플러그인은 gree 구현을 가져왔습니다([Windows README](native/windows/README.md), [macOS README](native/macos/README.md)). Unity 패키지(`com.robbie.goatwebview`)와 샘플 프로젝트 초안은 [Unity 패키지 README](unity/package/README.md)를 참고하세요. Unity Editor 재생은 후속 작업입니다.
+> Android의 Kotlin 코어·Compose 샘플과 iOS의 Swift 코어·SwiftUI 샘플을 구현했습니다. 실행 방법은 [Android README](native/android/README.md), [iOS README](native/ios/README.md)를 참고하세요. Windows Editor용 WebView2 플러그인과 macOS Editor용 플러그인은 gree 구현을 가져왔습니다([Windows README](native/windows/README.md), [macOS README](native/macos/README.md)). Unity 패키지(`com.robbie.goatwebview`)와 샘플 프로젝트는 작업 중이며 아직 저장소에 포함하지 않았습니다. Unity Editor 재생은 후속 작업입니다.
 
 ## 프로젝트 목표
 
@@ -74,7 +74,7 @@ iOS는 `native/ios/GoatWebViewSDK.xcworkspace`를 열고 `GoatWebViewSDKSample-S
 - `GoatWebViewSDKSample-SwiftUI`: SDK 프레임워크를 링크하는 SwiftUI 샘플. LINE SDK SwiftUI 샘플 구성(`ContentView`, `Player/`, `Support/`, `Utils/`, `Config.xcconfig`)을 따르며 플레이어 입력/인증 화면과 문의 웹뷰를 제공합니다.
 - iOS 15 이상, iPhone·iPad, 외부 패키지 의존성 없음.
 
-Unity Editor(macOS·Windows) 재생, 파일 업로드·권한 처리 등 추가 웹뷰 기능은 후속 작업입니다. Unity 샘플(`unity/sample`, Unity 6000.3.18f1)은 `PrefabSample`·`CodeSample` 씬으로 UniWebView의 "Using Prefab"·"Working with Code" 사용법을 보여 줍니다.
+Unity Editor(macOS·Windows) 재생, 파일 업로드·권한 처리 등 추가 웹뷰 기능은 후속 작업입니다. Unity 패키지와 샘플(`unity/`)은 작업 중입니다.
 
 `package.json`은 Unity 패키지 정보를 결정한 뒤 작성합니다. 레퍼런스 출처와 원본 고지는 [Android 출처 문서](native/android/THIRD_PARTY_NOTICES.md), [iOS 출처 문서](native/ios/THIRD_PARTY_NOTICES.md)에 정리합니다.
 
