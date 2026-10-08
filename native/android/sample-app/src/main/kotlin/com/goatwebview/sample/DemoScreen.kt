@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -62,6 +63,20 @@ private fun WebViewController.applySafeArea(preset: SafeArea) {
     preset.color?.let { (r, g, b, a) -> setTopSafeAreaColor(r, g, b, a) }
 }
 
+/** setRoundCornerRadius 프리셋(dp). topLeft, topRight, bottomLeft, bottomRight 순서. Mixed는 위만 둥글게(바텀시트 모양). */
+private enum class CornerRadius(val label: String, val dp: FloatArray) {
+    Off("Off", floatArrayOf(0f, 0f, 0f, 0f)),
+    R12("12", floatArrayOf(12f, 12f, 12f, 12f)),
+    R24("24", floatArrayOf(24f, 24f, 24f, 24f)),
+    Mixed("Mixed", floatArrayOf(24f, 24f, 0f, 0f)),
+}
+
+// SDK는 px를 받으므로 dp에 density를 곱한다(iOS 샘플은 같은 값을 pt로 넘긴다).
+private fun WebViewController.applyCornerRadius(preset: CornerRadius, density: Float) {
+    val (topLeft, topRight, bottomLeft, bottomRight) = preset.dp.map { it * density }
+    setRoundCornerRadius(topLeft, topRight, bottomLeft, bottomRight)
+}
+
 /**
  * webview-sdk 기능을 시험하는 화면. Load는 웹뷰를 숨긴 채 만들어 URL을 로드하고, Show는 그 웹뷰를 표시한다.
  * Fullscreen은 설정 화면을 치우고 전체 화면에, Popup은 설정 화면 위에 마진을 두고 띄운다(바깥 설정 화면은 계속 조작 가능).
@@ -74,6 +89,8 @@ fun DemoScreen() {
     var input by rememberSaveable { mutableStateOf(START_URL) }
     var safeArea by rememberSaveable { mutableStateOf(SafeArea.Black) }
     var scrollBounce by rememberSaveable { mutableStateOf(true) }
+    var cornerRadius by rememberSaveable { mutableStateOf(CornerRadius.Off) }
+    val density = LocalDensity.current.density
     // 팝업은 safe area와 겹치지 않을 만큼 마진을 준다. 바깥에는 배경을 두지 않아 창 배경이 그대로 보인다.
     var popup by rememberSaveable { mutableStateOf(false) }
     // null이면 웹뷰가 없다. 회전 후에는 이 URL로 웹뷰를 다시 만든다.
@@ -168,6 +185,19 @@ fun DemoScreen() {
                         },
                     )
                 }
+                Text("Corner radius")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CornerRadius.entries.forEach { preset ->
+                        FilterChip(
+                            selected = cornerRadius == preset,
+                            onClick = {
+                                cornerRadius = preset
+                                controller?.applyCornerRadius(preset, density)
+                            },
+                            label = { Text(preset.label) },
+                        )
+                    }
+                }
                 Text("Display")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = !popup, onClick = { popup = false }, label = { Text("Fullscreen") })
@@ -188,6 +218,7 @@ fun DemoScreen() {
                 visible = showing,
                 safeArea = safeArea,
                 scrollBounce = scrollBounce,
+                cornerRadius = cornerRadius,
                 onCreated = { controller = it },
                 onEvent = { event ->
                     when (event) {
@@ -218,6 +249,7 @@ private fun WebViewHost(
     visible: Boolean,
     safeArea: SafeArea,
     scrollBounce: Boolean,
+    cornerRadius: CornerRadius,
     onCreated: (WebViewController) -> Unit,
     onEvent: (WebViewEvent) -> Unit,
     modifier: Modifier = Modifier,
@@ -230,6 +262,7 @@ private fun WebViewHost(
                 val controller = it.controller
                 controller.applySafeArea(safeArea)
                 controller.setScrollBounceEnabled(scrollBounce)
+                controller.applyCornerRadius(cornerRadius, context.resources.displayMetrics.density)
                 controller.setVisible(visible)
                 onCreated(controller)
                 controller.loadUrl(url)

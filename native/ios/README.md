@@ -82,6 +82,7 @@ plugin.dispose()
 | `setVisibility(_:)` | 컨테이너(폴백 화면 + 웹뷰)를 보이거나 숨깁니다 |
 | `setTopSafeAreaColor(r:g:b:a:)` | 컨테이너 위쪽 safe area(상태바·노치 영역)를 (r, g, b, a) 색(각 0...1)으로 칠합니다. 폴백 화면과 웹뷰는 색과 상관없이 위쪽 safe area 중 컨테이너와 겹치는 부분을 비우고 그 아래부터 채우며, 좌우 safe area(가로 모드 노치)도 피합니다. 아래쪽 safe area(홈 인디케이터) 뒤는 채웁니다. safe area와 겹치지 않는 팝업형 컨테이너는 줄지 않습니다(Android와 같음). `a`가 0이면(기본값) 칠하지 않고 투명하게 비웁니다. Android와 같은 원시 타입 시그니처라 Unity C#의 `Color`를 그대로 넘길 수 있습니다. 상태바 아이콘 색은 호스트의 뷰 컨트롤러가 정합니다 |
 | `setScrollBounceEnabled(_:)` | 스크롤 끝에서 튕기는 효과(`scrollView.bounces`). 기본은 켜짐 |
+| `setRoundCornerRadius(topLeft:topRight:bottomLeft:bottomRight:)` | 웹 콘텐츠 영역(safe area를 피해 폴백 화면·웹뷰를 담은 `contentView`) 네 모서리 반지름(pt). 상단 띠와 컨테이너는 자르지 않으므로 풀스크린에서도 상태바 아래 웹 모서리가 보입니다. 음수는 0, 모두 0이면 자르지 않음. 같으면 `layer.cornerRadius`, 다르면 `CAShapeLayer` 마스크. Android와 같은 원시 타입 시그니처(Android는 px) |
 | `setSuspended(_:)` | 페이지의 미디어 재생을 멈추거나 다시 시작합니다. JavaScript 실행은 멈추지 않습니다 |
 | `showFallback()` | 호스트가 페이지를 실패로 판단했을 때(예: 준비 신호 타임아웃) 웹뷰를 숨기고 실패 화면을 보입니다. 진행 중인 로드가 끝나도 유지되고, 다음 탐색이 시작되면 풀립니다. 오류 콜백은 보내지 않습니다 |
 | `dispose()` | 로드를 멈추고 뷰를 떼며 핸들러를 해제합니다. 여러 번 불러도 안전하고 이후 콜백은 없습니다. 부르지 않고 놓아도 해제될 때 로드를 멈추고 뷰를 뗍니다 |
@@ -178,7 +179,7 @@ DEBUG 빌드에서는 iOS 16.4 이상에서 Safari 웹 검사기로 볼 수 있�
 
 ## 샘플 동작
 
-샘플은 GoatWebViewSDK 기능을 직접 시험하는 화면이며 Android `DemoScreen`과 조작·문구가 같습니다. 설정 화면에서 URL, 상단 safe area 색(`setTopSafeAreaColor` 프리셋), 스크롤 바운스(`setScrollBounceEnabled`)를 정하고 캐시를 비울 수 있습니다. **Load**는 웹뷰를 숨긴 채 만들어 URL을 미리 로드하고, **Show**는 그 웹뷰를 표시합니다. Load 전에 Show를 누르면 Load부터 합니다.
+샘플은 GoatWebViewSDK 기능을 직접 시험하는 화면이며 Android `DemoScreen`과 조작·문구가 같습니다. 설정 화면에서 URL, 상단 safe area 색(`setTopSafeAreaColor` 프리셋), 스크롤 바운스(`setScrollBounceEnabled`), 모서리 반지름(`setRoundCornerRadius` 프리셋)을 정하고 캐시를 비울 수 있습니다. **Load**는 웹뷰를 숨긴 채 만들어 URL을 미리 로드하고, **Show**는 그 웹뷰를 표시합니다. Load 전에 Show를 누르면 Load부터 합니다.
 
 ```text
 설정 화면(스크롤)                         Show ▶   WebView (Fullscreen)
@@ -186,7 +187,8 @@ DEBUG 빌드에서는 iOS 16.4 이상에서 Safari 웹 검사기로 볼 수 있�
 │ URL [https://example.com   ] │          │▓▓ 상단 safe area 색 ▓▓▓▓│
 │ Top safe area color          │          ├──────────────────────────┤
 │ [Off|Black|White|Red]        │          │                          │
-│ Scroll bounce        [● ON]  │          │ WebView                  │
+│ Scroll bounce        [● ON]  │          │                          │
+│ Corner [Off|12|24|Mixed]     │          │ WebView                  │
 │ Display [Fullscreen|Popup]   │   ◀ Back │                  [< Back]│
 │ [Clear Cache]                │(dispose) └──────────────────────────┘
 │ [Load]  [Show]               │
@@ -195,6 +197,7 @@ DEBUG 빌드에서는 iOS 16.4 이상에서 Safari 웹 검사기로 볼 수 있�
 ```
 
 - 프리셋과 스위치는 웹뷰가 있으면 즉시 적용하고, 웹뷰를 만들 때도 적용합니다. 상단 색 **Off**는 `setTopSafeAreaColor`를 호출하지 않으므로 SDK 기본값(상태바 영역을 투명하게 비우고 그 아래부터 웹뷰)이 됩니다. 이미 색을 적용한 웹뷰에는 다음 Load부터 반영됩니다.
+- **Corner radius**는 웹 콘텐츠 영역(폴백 화면·웹뷰) 네 모서리를 둥글게 자릅니다. Off(0), 12, 24, Mixed(위쪽 두 모서리만 24, 바텀시트 모양) 프리셋이며 값은 pt로, Android 샘플(dp)과 같은 크기로 보입니다. 상단 띠는 자르지 않으므로 Fullscreen에서도 상태바 아래 웹 모서리가 둥글게 보입니다. Fullscreen의 아래 모서리는 웹이 홈 인디케이터 뒤까지 채우므로 물리 화면 모서리와 겹칩니다.
 - **Display**는 웹뷰를 화면 전체(Fullscreen) 또는 설정 화면 위에 좌우 24pt·상하 96pt 마진을 둔 팝업(Popup)으로 엽니다. Fullscreen은 설정 화면을 치우고, 비워 둔 safe area에는 Android 샘플과 같은 창 배경(`#F4F6FA`)이 보입니다. Popup은 설정 화면이 그대로 보이고 조작할 수 있어, 상단 색·바운스·캐시를 바꾸면 떠 있는 웹뷰에 바로 반영됩니다. 팝업은 safe area와 겹치지 않으므로 상단 띠 없이 웹뷰가 팝업을 그대로 채웁니다.
 - iOS에는 시스템 뒤로가기가 없으므로 표시 중에는 오른쪽 아래에 **Back** 버튼을 둡니다. 웹 기록이 있으면 웹에서 뒤로 가고, 없으면 웹뷰를 `dispose()`하고 설정 화면으로 돌아갑니다(Android 뒤로가기와 같음). 폴백 화면의 닫기 버튼도 같은 상태로 돌아갑니다. 다음 Load는 새 웹뷰에서 시작합니다.
 - 숨긴 웹뷰(Load 후 Show 전)는 터치를 받지 않아 아래 설정 화면을 그대로 조작할 수 있습니다(`PassthroughView.hitTest`).
@@ -250,6 +253,10 @@ Unity 헤더를 쓰지 않으므로 SDK 빌드·테스트에 그대로 포함됩
 | `goatwebview_can_go_back(gameObjectName)`, `goatwebview_can_go_forward(gameObjectName)` | 방문 기록 상태 |
 | `goatwebview_go_back`, `go_forward`, `reload`, `stop_loading` | 탐색 |
 | `goatwebview_set_margins(gameObjectName, l, t, r, b, relative)` | `relative`가 아니면 화면 픽셀을 부모 뷰 `contentScaleFactor`로 나눠 포인트로 바꿉니다(upstream `getScale`) |
+| `goatwebview_set_frame(gameObjectName, x, y, w, h)` | Android `setFrame`과 같습니다. 상단 safe area를 뺀 부모 뷰 영역에 대한 비율(0...1), 원점은 safe area 바로 아래 좌상단 |
+| `goatwebview_set_round_corner_radius(gameObjectName, tl, tr, bl, br)` | Unity 화면 픽셀을 `contentScaleFactor`로 나눠 pt로 바꿔 `setRoundCornerRadius`를 부릅니다 |
+| `goatwebview_get_url(gameObjectName)` | 현재 URL을 `strdup`한 문자열로 돌려줍니다(C#이 해제). 없으면 NULL |
+| `goatwebview_set_scroll_bounce_enabled`, `goatwebview_clear_cache()`, `goatwebview_set_forward_web_console_to_native_output(bool)` | `setScrollBounceEnabled`, `WebViewCache.clear`, `setForwardWebConsoleToNativeOutput` |
 | `goatwebview_set_visibility`, `set_top_safe_area_color`, `set_suspended`, `show_fallback` | 같은 이름의 SDK API |
 
 이벤트는 `UnitySendMessage(gameObjectName, 메서드 이름, JSON)`으로 보냅니다. 메서드 이름과 JSON 필드는 Android `unity-wrapper`(UniWebView 이벤트 이름)와 같으며, 그 GameObject의 컴포넌트가 아래 메서드를 `string` 인자 하나로 받습니다. 값이 없는 필드는 `null`입니다.

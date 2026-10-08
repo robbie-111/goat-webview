@@ -15,7 +15,7 @@ export ANDROID_HOME="/path/to/Android/sdk"
 ./gradlew :sample-app:installDebug
 ```
 
-샘플은 `webview-sdk` 기능을 직접 시험하는 화면입니다. 설정 화면에서 URL, 상단 safe area 색(`setTopSafeAreaColor` 프리셋), 스크롤 바운스(`setScrollBounceEnabled`)를 정하고 캐시를 비울 수 있습니다. **Load**는 웹뷰를 숨긴 채 만들어 URL을 미리 로드하고, **Show**는 그 웹뷰를 전체 화면으로 표시합니다. Load 전에 Show를 누르면 Load부터 합니다. 웹뷰가 표시된 상태에서 Android 뒤로가기를 누르면 웹 기록이 있을 때는 웹에서 뒤로 가고, 없으면 웹뷰를 destroy하고 설정 화면으로 돌아갑니다. 다음 Load는 새 웹뷰에서 시작합니다.
+샘플은 `webview-sdk` 기능을 직접 시험하는 화면입니다. 설정 화면에서 URL, 상단 safe area 색(`setTopSafeAreaColor` 프리셋), 스크롤 바운스(`setScrollBounceEnabled`), 모서리 반지름(`setRoundCornerRadius` 프리셋)을 정하고 캐시를 비울 수 있습니다. **Load**는 웹뷰를 숨긴 채 만들어 URL을 미리 로드하고, **Show**는 그 웹뷰를 전체 화면으로 표시합니다. Load 전에 Show를 누르면 Load부터 합니다. 웹뷰가 표시된 상태에서 Android 뒤로가기를 누르면 웹 기록이 있을 때는 웹에서 뒤로 가고, 없으면 웹뷰를 destroy하고 설정 화면으로 돌아갑니다. 다음 Load는 새 웹뷰에서 시작합니다.
 
 ```text
 설정 화면(스크롤)                         Show ▶   전체 화면 WebView
@@ -23,7 +23,8 @@ export ANDROID_HOME="/path/to/Android/sdk"
 │ URL [https://example.com   ] │          │▓▓ 상단 safe area 색 ▓▓▓▓│
 │ Top safe area                │          ├──────────────────────────┤
 │ (Off)(Black)(White)(Red)     │          │                          │
-│ Scroll bounce        [● ON]  │          │ WebView                  │
+│ Scroll bounce        [● ON]  │          │                          │
+│ Corner (Off)(12)(24)(Mixed)  │          │ WebView                  │
 │ [Clear Cache]                │   ◀ 뒤로 │                          │
 │ [Load]  [Show]               │(destroy) └──────────────────────────┘
 │ Finished https://… (200)     │
@@ -31,6 +32,7 @@ export ANDROID_HOME="/path/to/Android/sdk"
 ```
 
 - 프리셋과 스위치는 웹뷰가 있으면 즉시 적용하고, 웹뷰를 만들 때도 적용합니다. 상단 색 **Off**는 `setTopSafeAreaColor`를 호출하지 않으므로 SDK 기본값(상태바 영역을 투명하게 비우고 그 아래부터 웹뷰)이 됩니다. 이미 색을 적용한 웹뷰에는 다음 Load부터 반영됩니다.
+- **Corner radius**는 웹 콘텐츠 영역(safe area를 피해 웹뷰가 놓인 사각형) 네 모서리를 둥글게 자릅니다. Off(0), 12, 24, Mixed(위쪽 두 모서리만 24, 바텀시트 모양) 프리셋이며 값은 dp입니다. SDK는 px를 받으므로 샘플이 density를 곱해 넘깁니다(iOS 샘플은 같은 값을 pt로 넘깁니다). 상단 띠는 자르지 않으므로 Fullscreen에서도 상태바 아래 웹 모서리가 둥글게 보입니다. Fullscreen의 아래 모서리는 웹이 제스처 핸들 뒤까지 채우면 물리 화면 모서리와 겹칩니다.
 - **Display**는 웹뷰를 화면 전체(Fullscreen) 또는 설정 화면 위에 좌우 24dp·상하 96dp 마진을 둔 팝업(Popup)으로 엽니다. Fullscreen은 설정 화면을 치우고, 비워 둔 safe area에는 Activity 창 배경(`styles.xml`의 `#F4F6FA`)이 보입니다. Popup은 설정 화면이 그대로 보이고 조작할 수 있어, 상단 색·바운스·캐시를 바꾸면 떠 있는 웹뷰에 바로 반영됩니다. 팝업은 safe area와 겹치지 않으므로 상단 띠 없이 웹뷰가 팝업을 그대로 채웁니다.
 - **Clear Cache**는 웹뷰가 있으면 `clearCache(true)`, 없으면 `WebViewCache.clear(context)`를 호출합니다.
 - 화면 아래 상태 문구에는 `PageStarted`, `PageFinished`(HTTP 상태 포함), `LoadingErrorReceived`, 캐시 결과를 표시합니다.
@@ -71,6 +73,7 @@ native/android/
 - 풀스크린 WebView는 3버튼 내비게이션 바(가로 모드에서는 측면 바)와 측면 디스플레이 컷아웃만큼 비켜 섭니다. 제스처 내비게이션에서는 핸들 뒤까지 채웁니다(iOS 홈 인디케이터와 같음). `tappableElement` inset을 쓰므로 내비게이션 모드를 바꾸면 바로 반영됩니다. 비워진 바 뒤쪽은 칠하지 않으며, 3버튼 바에는 시스템 대비 스크림이 그려집니다.
 - 이벤트(`WebViewEvent`) 이름은 UniWebView 이벤트에서 `On`을 뺀 것입니다. `PageStarted`, `PageFinished(url, statusCode)`, `LoadingErrorReceived`(네트워크·렌더러), `MessageReceived`, `NavigationChanged`, `MessageBridgeUnavailable`이 있습니다. 메인 문서의 HTTP 오류는 별도 이벤트 없이 `PageFinished.statusCode`로 전달합니다.
 - `setScrollBounceEnabled(enabled)`는 오버스크롤 효과를 켜고 끕니다(기본 켜짐, Android 기본 동작). `clearCache(includeDiskFiles)`는 앱의 모든 WebView가 공유하는 리소스 캐시를 비웁니다. 웹뷰를 만들기 전에는 `WebViewCache.clear(context)`를 씁니다.
+- `setRoundCornerRadius(topLeft, topRight, bottomLeft, bottomRight)`(px)는 웹 콘텐츠 영역(WebView를 담아 safe area를 피해 배치한 내부 뷰) 네 모서리를 둥글게 자릅니다. 상단 safe area 띠와 바깥 컨테이너는 자르지 않으므로 풀스크린에서도 상태바 아래 웹 모서리가 보입니다. 음수는 0, 모두 0이면 자르지 않습니다. 네 값이 같으면 outline 둥근 사각형, 다르면 API 33 이상은 outline path, 그 미만은 `clipPath`(가장자리 안티앨리어싱 없음)로 자릅니다. iOS와 같은 원시 타입 시그니처입니다(iOS는 pt).
 - 웹 콘솔 로그는 이벤트로 보내지 않습니다. 토큰 등이 포함될 수 있어 기본으로는 출력하지 않습니다. `WebViewController.setForwardWebConsoleToNativeOutput(true)`(static)이면 모든 웹뷰의 로그를 logcat `GoatWebView` 태그에 레벨별(`Log.e`/`w`/`d`/`i`)로 출력합니다.
 
 `unity-wrapper`는 `webview-sdk`를 참조하며, `webview-sdk`는 Unity를 알지 못합니다. Unity `classes.jar`는 `compileOnly`로만 참조하므로 AAR에 포함되지 않습니다. 기기 테스트는 UnitySendMessage 대신 전송 내용을 받아 Unity 없이 실행합니다.
@@ -90,7 +93,7 @@ native/android/
 
 - 탐색 상태는 UniWebView처럼 이벤트 없이 `canGoBack()`, `canGoForward()`, `getUrl()`로 조회합니다. WebView는 UI 스레드에서만 접근할 수 있으므로 래퍼가 코어 `NavigationChanged`의 마지막 값을 보관하고, Unity 스레드에서 바로 반환합니다. `pushState` 같은 문서 내 이동도 반영됩니다.
 - UnitySendMessage는 이름으로 GameObject를 찾으므로 이름은 씬에서 고유해야 하고 생성 후 바꾸지 않습니다.
-- `setScrollBounceEnabled(bool)`, `clearCache(bool includeDiskFiles)`는 코어의 같은 메서드를 호출합니다. 웹뷰가 없을 때는 `UnityWebView.clearSharedCache()`(static, 어느 스레드에서나 호출 가능)로 앱 공용 캐시를 비웁니다. 이벤트를 받을 GameObject가 없으므로 실패는 logcat에만 남습니다.
+- `setScrollBounceEnabled(bool)`, `clearCache(bool includeDiskFiles)`, `setRoundCornerRadius(tl, tr, bl, br)`(px)는 코어의 같은 메서드를 호출합니다. 웹뷰가 없을 때는 `UnityWebView.clearSharedCache()`(static, 어느 스레드에서나 호출 가능)로 앱 공용 캐시를 비웁니다. 이벤트를 받을 GameObject가 없으므로 실패는 logcat에만 남습니다.
 - 웹 콘솔 로그는 이벤트로 보내지 않습니다. `UnityWebView.setForwardWebConsoleToNativeOutput(true)`(static, 기본 false)는 코어의 같은 설정에 위임합니다.
 - 코어에서 발생한 잘못된 호출 예외는 앱을 종료하지 않고 `LoadingErrorReceived`(`kind` = `INVALID_CALL`)로 전달합니다. 잘못된 출처 설정은 생성자에서 예외로 알립니다. `destroy` 이후의 호출은 무시합니다.
 

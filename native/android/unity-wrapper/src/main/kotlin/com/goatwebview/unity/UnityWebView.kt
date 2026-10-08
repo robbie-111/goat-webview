@@ -99,6 +99,10 @@ class UnityWebView internal constructor(
 
     fun setTopSafeAreaColor(r: Float, g: Float, b: Float, a: Float) = withController { it.setTopSafeAreaColor(r, g, b, a) }
 
+    /** 네 모서리 반지름(px). C#은 Unity 화면 픽셀을 기기 픽셀로 바꿔 넘긴다. */
+    fun setRoundCornerRadius(topLeft: Float, topRight: Float, bottomLeft: Float, bottomRight: Float) =
+        withController { it.setRoundCornerRadius(topLeft, topRight, bottomLeft, bottomRight) }
+
     /**
      * 상단 safe area(상태바·컷아웃)를 뺀 콘텐츠 영역에 대한 비율(0..1)로 위치와 크기를 정한다.
      * 원점은 safe area 바로 아래의 좌상단이다. 프레임이 safe area 아래에 놓이므로 코어가 위쪽을 다시 비우지 않는다.

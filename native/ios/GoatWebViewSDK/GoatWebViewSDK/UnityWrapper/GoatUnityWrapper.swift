@@ -231,6 +231,66 @@ public func goatwebview_set_margins(_ gameObjectName: UnsafePointer<CChar>?, _ l
     }
 }
 
+/// Android unity-wrapper `setFrame`과 같다. 상단 safe area(상태바·노치)를 뺀 부모 뷰 영역에 대한 비율(0...1)이며,
+/// 원점은 safe area 바로 아래의 좌상단이다. 프레임이 safe area 아래에 놓이므로 컨테이너가 위쪽을 다시 비우지 않는다.
+@_cdecl("goatwebview_set_frame")
+public func goatwebview_set_frame(_ gameObjectName: UnsafePointer<CChar>?, _ x: Float, _ y: Float, _ width: Float, _ height: Float) {
+    MainActor.assumeIsolated {
+        guard let wrapper = GoatUnityWrapper.wrapper(gameObjectName) else { return }
+        let bounds = wrapper.parentView.bounds
+        let safeTop = min(wrapper.parentView.safeAreaInsets.top, bounds.height)
+        let available = bounds.height - safeTop
+        let left = CGFloat(x) * bounds.width
+        let top = safeTop + CGFloat(y) * available
+        let right = bounds.width - left - CGFloat(width) * bounds.width
+        let bottom = bounds.height - top - CGFloat(height) * available
+        wrapper.plugin.setMargins(left: left, top: top, right: right, bottom: bottom, relative: false)
+    }
+}
+
+/// Unity 화면 픽셀을 받아 set_margins처럼 부모 뷰의 contentScaleFactor로 나눠 pt로 바꾼다.
+@_cdecl("goatwebview_set_round_corner_radius")
+public func goatwebview_set_round_corner_radius(_ gameObjectName: UnsafePointer<CChar>?, _ topLeft: Float, _ topRight: Float,
+                                                _ bottomLeft: Float, _ bottomRight: Float) {
+    MainActor.assumeIsolated {
+        guard let wrapper = GoatUnityWrapper.wrapper(gameObjectName) else { return }
+        let scale = Float(wrapper.parentView.contentScaleFactor)
+        wrapper.plugin.setRoundCornerRadius(topLeft: topLeft / scale, topRight: topRight / scale,
+                                            bottomLeft: bottomLeft / scale, bottomRight: bottomRight / scale)
+    }
+}
+
+@_cdecl("goatwebview_set_scroll_bounce_enabled")
+public func goatwebview_set_scroll_bounce_enabled(_ gameObjectName: UnsafePointer<CChar>?, _ enabled: Bool) {
+    MainActor.assumeIsolated {
+        GoatUnityWrapper.wrapper(gameObjectName)?.plugin.setScrollBounceEnabled(enabled)
+    }
+}
+
+/// 현재 URL. C#이 반환 문자열을 해제하므로 strdup으로 넘긴다. 웹뷰가 없거나 URL이 없으면 NULL이다.
+@_cdecl("goatwebview_get_url")
+public func goatwebview_get_url(_ gameObjectName: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
+    let url = MainActor.assumeIsolated {
+        GoatUnityWrapper.wrapper(gameObjectName)?.plugin.webView?.url?.absoluteString
+    }
+    return url.flatMap { strdup($0) }
+}
+
+/// 웹뷰 인스턴스 없이 앱의 모든 웹뷰가 공유하는 디스크·메모리 캐시를 비운다(Android clearSharedCache).
+@_cdecl("goatwebview_clear_cache")
+public func goatwebview_clear_cache() {
+    MainActor.assumeIsolated {
+        WebViewCache.clear()
+    }
+}
+
+@_cdecl("goatwebview_set_forward_web_console_to_native_output")
+public func goatwebview_set_forward_web_console_to_native_output(_ enabled: Bool) {
+    MainActor.assumeIsolated {
+        WebViewPlugin.setForwardWebConsoleToNativeOutput(enabled)
+    }
+}
+
 @_cdecl("goatwebview_set_visibility")
 public func goatwebview_set_visibility(_ gameObjectName: UnsafePointer<CChar>?, _ visible: Bool) {
     MainActor.assumeIsolated {

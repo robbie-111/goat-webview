@@ -100,13 +100,13 @@ public final class WebViewPlugin: NSObject {
         containerView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         containerView.isHidden = true
 
-        let fallbackView = FallbackView(frame: containerView.bounds)
+        let fallbackView = FallbackView(frame: containerView.contentView.bounds)
         fallbackView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         fallbackView.closeHandler = { [weak self] in
             self?.close()
         }
 
-        let webView = WKWebView(frame: containerView.bounds, configuration: configuration)
+        let webView = WKWebView(frame: containerView.contentView.bounds, configuration: configuration)
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         webView.isHidden = true
         // cf. https://rick38yip.medium.com/wkwebview-weird-spacing-issue-in-ios-13-54a4fc686f72
@@ -119,8 +119,9 @@ public final class WebViewPlugin: NSObject {
         let navigationHandler = NavigationHandler(plugin: self)
         webView.navigationDelegate = navigationHandler
 
-        containerView.addSubview(fallbackView)
-        containerView.addSubview(webView)
+        // 폴백 화면과 웹뷰는 웹 콘텐츠 영역에 겹쳐 두고 autoresizing으로 채운다.
+        containerView.contentView.addSubview(fallbackView)
+        containerView.contentView.addSubview(webView)
         parentView.addSubview(containerView)
 
         self.webView = webView
@@ -223,6 +224,15 @@ public final class WebViewPlugin: NSObject {
         // CGRect.width/height는 음수 크기를 절댓값으로 돌려주므로 size로 잘라야 여백이 부모보다 클 때 0이 된다.
         containerView.frame = CGRect(x: floor(frame.origin.x), y: floor(frame.origin.y),
                                      width: floor(max(frame.size.width, 0)), height: floor(max(frame.size.height, 0)))
+    }
+
+    /// 웹 콘텐츠 영역(safe area를 피해 폴백 화면·웹뷰가 놓인 사각형) 네 모서리의 반지름을 pt로 정한다. 음수는 0으로 보고, 모두 0이면 자르지 않는다.
+    /// 상단 띠와 컨테이너는 자르지 않으므로 풀스크린에서도 상태바 아래 웹 모서리가 둥글게 보인다.
+    /// 풀스크린의 아래 모서리는 웹이 홈 인디케이터 뒤까지 채우므로 물리 화면 모서리와 겹친다.
+    /// Android `setRoundCornerRadius(topLeft, topRight, bottomLeft, bottomRight)`(px)와 같은 원시 타입 시그니처다.
+    public func setRoundCornerRadius(topLeft: Float, topRight: Float, bottomLeft: Float, bottomRight: Float) {
+        containerView?.cornerRadii = .init(topLeft: CGFloat(max(topLeft, 0)), topRight: CGFloat(max(topRight, 0)),
+                                           bottomLeft: CGFloat(max(bottomLeft, 0)), bottomRight: CGFloat(max(bottomRight, 0)))
     }
 
     /// 스크롤 끝에서 튕기는 효과를 켜거나 끈다. 기본은 켜짐(WKWebView 기본)이다.

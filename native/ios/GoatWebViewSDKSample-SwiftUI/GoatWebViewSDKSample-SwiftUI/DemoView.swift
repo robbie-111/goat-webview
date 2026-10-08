@@ -22,11 +22,36 @@ enum SafeAreaPreset: String, CaseIterable, Identifiable {
     }
 }
 
+/// setRoundCornerRadius 프리셋(pt). Android 샘플과 같은 값(dp)이며 Mixed는 위만 둥글게(바텀시트 모양) 한다.
+enum CornerRadiusPreset: String, CaseIterable, Identifiable {
+    case off = "Off"
+    case r12 = "12"
+    case r24 = "24"
+    case mixed = "Mixed"
+
+    var id: Self { self }
+
+    var radii: (topLeft: Float, topRight: Float, bottomLeft: Float, bottomRight: Float) {
+        switch self {
+        case .off: return (0, 0, 0, 0)
+        case .r12: return (12, 12, 12, 12)
+        case .r24: return (24, 24, 24, 24)
+        case .mixed: return (24, 24, 0, 0)
+        }
+    }
+}
+
 extension WebViewPlugin {
     func applySafeArea(_ preset: SafeAreaPreset) {
         if let color = preset.color {
             setTopSafeAreaColor(r: color.r, g: color.g, b: color.b, a: color.a)
         }
+    }
+
+    func applyCornerRadius(_ preset: CornerRadiusPreset) {
+        let radii = preset.radii
+        setRoundCornerRadius(topLeft: radii.topLeft, topRight: radii.topRight,
+                             bottomLeft: radii.bottomLeft, bottomRight: radii.bottomRight)
     }
 }
 
@@ -37,6 +62,7 @@ struct DemoView: View {
     @State private var input = startURL
     @State private var safeArea = SafeAreaPreset.black
     @State private var scrollBounce = true
+    @State private var cornerRadius = CornerRadiusPreset.off
     // 팝업은 safe area와 겹치지 않을 만큼 마진을 준다. 바깥에는 배경을 두지 않아 창 배경이 그대로 보인다.
     @State private var popup = false
     // nil이면 웹뷰가 없다.
@@ -59,6 +85,7 @@ struct DemoView: View {
                     visible: showing,
                     safeArea: safeArea,
                     scrollBounce: scrollBounce,
+                    cornerRadius: cornerRadius,
                     onCreated: { plugin = $0 },
                     onStatus: { status = $0 },
                     onClosed: close
@@ -96,6 +123,14 @@ struct DemoView: View {
                 .onChange(of: safeArea) { plugin?.applySafeArea($0) }
                 Toggle("Scroll bounce", isOn: $scrollBounce)
                     .onChange(of: scrollBounce) { plugin?.setScrollBounceEnabled($0) }
+                Text("Corner radius")
+                Picker("Corner radius", selection: $cornerRadius) {
+                    ForEach(CornerRadiusPreset.allCases) { preset in
+                        Text(preset.rawValue).tag(preset)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: cornerRadius) { plugin?.applyCornerRadius($0) }
                 Text("Display")
                 Picker("Display", selection: $popup) {
                     Text("Fullscreen").tag(false)

@@ -9,6 +9,7 @@ struct WebViewHost: UIViewRepresentable {
     let visible: Bool
     let safeArea: SafeAreaPreset
     let scrollBounce: Bool
+    let cornerRadius: CornerRadiusPreset
     let onCreated: (WebViewPlugin) -> Void
     let onStatus: (String) -> Void
     let onClosed: () -> Void
@@ -23,6 +24,7 @@ struct WebViewHost: UIViewRepresentable {
         plugin.delegate = context.coordinator
         plugin.applySafeArea(safeArea)
         plugin.setScrollBounceEnabled(scrollBounce)
+        plugin.applyCornerRadius(cornerRadius)
         plugin.setVisibility(visible)
         plugin.loadURL(url)
         context.coordinator.plugin = plugin

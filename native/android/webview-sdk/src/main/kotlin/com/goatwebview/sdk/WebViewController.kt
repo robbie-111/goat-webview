@@ -3,12 +3,17 @@ package com.goatwebview.sdk
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Outline
+import android.graphics.Path
+import android.os.Build
 import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.webkit.ConsoleMessage
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
@@ -21,6 +26,7 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.annotation.MainThread
 import androidx.core.graphics.Insets
+import androidx.core.graphics.withClip
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -49,6 +55,8 @@ class WebViewController(
 ) {
     private val webView: WebView
     private val containerView: FrameLayout
+    // WebView를 담아 safe area를 피한 자리에 놓이는 웹 콘텐츠 영역. 모서리 라운딩은 이 뷰를 자른다.
+    private val contentView: FrameLayout
     private val topSafeAreaView: View
     // 상태바(디스플레이 컷아웃 포함) 위쪽 inset과, 비운 영역을 칠할지 여부. 비우는 것은 항상 한다.
     private var topSafeAreaInset = 0
@@ -57,6 +65,8 @@ class WebViewController(
     private val containerLocation = IntArray(2)
     // 3버튼 내비게이션 바와 측면 컷아웃 크기. 제스처 핸들은 터치 대상이 아니라 0이다.
     private var sideSafeAreaInsets = Insets.NONE
+    // 컨테이너 모서리 반지름(px). Path.addRoundRect 순서: 좌상, 우상, 우하, 좌하의 (x, y).
+    private var cornerRadii = FloatArray(8)
     private var listener: ((WebViewEvent) -> Unit)? = eventListener
     private var bridgeInstalled = false
     // 지금 메인 문서의 HTTP 상태. 새 탐색이 시작되면 200으로 되돌린다.
@@ -85,6 +95,26 @@ class WebViewController(
         checkMainThread()
         webView = WebView(context)
         topSafeAreaView = View(context).apply { visibility = View.GONE }
+        contentView = object : FrameLayout(context) {
+            // 모서리 반지름이 서로 다른데 outline path로 자를 수 없는 API 33 미만에서만 쓴다(가장자리 안티앨리어싱 없음).
+            override fun dispatchDraw(canvas: Canvas) {
+                if (!needsCornerClipPath()) return super.dispatchDraw(canvas)
+                canvas.withClip(cornerPath(width, height)) { super.dispatchDraw(this) }
+            }
+        }.apply {
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    if (hasUniformCorners()) {
+                        outline.setRoundRect(0, 0, view.width, view.height, cornerRadii[0])
+                    } else if (Build.VERSION.SDK_INT >= 33) {
+                        outline.setPath(cornerPath(view.width, view.height))
+                    } else {
+                        outline.setRect(0, 0, view.width, view.height)
+                    }
+                }
+            }
+            addView(webView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        }
         // safe area와 겹치는 크기는 컨테이너의 window 위치에 달려 있으므로 직접 measure·layout한다.
         // measure와 layout이 같은 결과를 쓰게 해 WebView 크기가 레이아웃마다 바뀌지 않게 한다(스크롤·fixed 요소 깜박임 방지).
         containerView = object : FrameLayout(context) {
@@ -99,7 +129,7 @@ class WebViewController(
                 layoutInsideSafeArea(right - left, bottom - top)
             }
         }.apply {
-            addView(webView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            addView(contentView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             addView(topSafeAreaView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 0, Gravity.TOP))
         }
         // insets는 소비하지 않고 그대로 하위 뷰에 넘긴다.
@@ -285,6 +315,25 @@ class WebViewController(
         webView.overScrollMode = if (enabled) View.OVER_SCROLL_IF_CONTENT_SCROLLS else View.OVER_SCROLL_NEVER
     }
 
+    /**
+     * 웹 콘텐츠 영역(safe area를 피해 WebView가 놓인 사각형) 네 모서리의 반지름을 px로 정한다. 음수는 0으로 보고, 모두 0이면 자르지 않는다.
+     * 상단 safe area 띠와 바깥 컨테이너는 자르지 않으므로 풀스크린에서도 상태바 아래 웹 모서리가 둥글게 보인다.
+     * 풀스크린의 아래 모서리는 웹이 제스처 핸들 뒤까지 채우면 물리 화면 모서리와 겹친다.
+     * 네 값이 같으면 outline 둥근 사각형, 다르면 API 33 이상은 outline path, 그 미만은 clipPath로 자른다.
+     * iOS `setRoundCornerRadius(topLeft:topRight:bottomLeft:bottomRight:)`(pt)와 같은 원시 타입 시그니처다.
+     */
+    fun setRoundCornerRadius(topLeft: Float, topRight: Float, bottomLeft: Float, bottomRight: Float) {
+        checkActive()
+        val tl = topLeft.coerceAtLeast(0f)
+        val tr = topRight.coerceAtLeast(0f)
+        val bl = bottomLeft.coerceAtLeast(0f)
+        val br = bottomRight.coerceAtLeast(0f)
+        cornerRadii = floatArrayOf(tl, tl, tr, tr, br, br, bl, bl)
+        contentView.clipToOutline = cornerRadii.any { it > 0f } && (hasUniformCorners() || Build.VERSION.SDK_INT >= 33)
+        contentView.invalidateOutline()
+        contentView.invalidate()
+    }
+
     /** 앱의 모든 WebView가 공유하는 리소스 캐시를 비운다. [includeDiskFiles]가 false면 메모리 캐시만 비운다. */
     fun clearCache(includeDiskFiles: Boolean) {
         checkActive()
@@ -331,7 +380,7 @@ class WebViewController(
         }
         ViewCompat.setOnApplyWindowInsetsListener(containerView, null)
         (containerView.parent as? ViewGroup)?.removeView(containerView)
-        containerView.removeView(webView)
+        contentView.removeView(webView)
         webView.stopLoading()
         webView.webChromeClient = null
         webView.webViewClient = WebViewClient()
@@ -364,10 +413,10 @@ class WebViewController(
         return SafeArea(left, top, right, bottom, width - left - right, height - top - bottom)
     }
 
-    /** 마지막으로 알려진 컨테이너 위치로 WebView와 띠를 한 번만 measure한다. */
+    /** 마지막으로 알려진 컨테이너 위치로 웹 콘텐츠 영역과 띠를 한 번만 measure한다. */
     private fun measureInsideSafeArea(width: Int, height: Int) {
         val area = safeAreaFor(width, height)
-        webView.measure(exactly(area.width), exactly(area.height))
+        contentView.measure(exactly(area.width), exactly(area.height))
         topSafeAreaView.measure(exactly(width), exactly(area.top))
     }
 
@@ -375,14 +424,22 @@ class WebViewController(
     private fun layoutInsideSafeArea(width: Int, height: Int) {
         containerView.getLocationInWindow(containerLocation)
         val area = safeAreaFor(width, height)
-        if (webView.measuredWidth != area.width || webView.measuredHeight != area.height) {
-            webView.measure(exactly(area.width), exactly(area.height))
+        if (contentView.measuredWidth != area.width || contentView.measuredHeight != area.height) {
+            contentView.measure(exactly(area.width), exactly(area.height))
         }
-        webView.layout(area.left, area.top, area.left + area.width, area.top + area.height)
+        contentView.layout(area.left, area.top, area.left + area.width, area.top + area.height)
         if (topSafeAreaView.measuredWidth != width || topSafeAreaView.measuredHeight != area.top) {
             topSafeAreaView.measure(exactly(width), exactly(area.top))
         }
         topSafeAreaView.layout(0, 0, width, area.top)
+    }
+
+    private fun hasUniformCorners() = cornerRadii.all { it == cornerRadii[0] }
+
+    private fun needsCornerClipPath() = Build.VERSION.SDK_INT < 33 && !hasUniformCorners()
+
+    private fun cornerPath(width: Int, height: Int) = Path().apply {
+        addRoundRect(0f, 0f, width.toFloat(), height.toFloat(), cornerRadii, Path.Direction.CW)
     }
 
     private fun exactly(size: Int) = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
