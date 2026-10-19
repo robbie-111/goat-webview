@@ -212,20 +212,6 @@ public final class WebViewPlugin: NSObject {
 
     // MARK: - Layout
 
-    /// 부모 뷰 기준 여백. `relative`이면 부모 크기에 대한 비율(0...1), 아니면 포인트다.
-    public func setMargins(left: CGFloat, top: CGFloat, right: CGFloat, bottom: CGFloat, relative: Bool) {
-        guard let containerView, let parentView = containerView.superview else { return }
-        let bounds = parentView.bounds
-        let insets = relative
-            ? UIEdgeInsets(top: bounds.height * top, left: bounds.width * left,
-                           bottom: bounds.height * bottom, right: bounds.width * right)
-            : UIEdgeInsets(top: top, left: left, bottom: bottom, right: right)
-        let frame = bounds.inset(by: insets)
-        // CGRect.width/height는 음수 크기를 절댓값으로 돌려주므로 size로 잘라야 여백이 부모보다 클 때 0이 된다.
-        containerView.frame = CGRect(x: floor(frame.origin.x), y: floor(frame.origin.y),
-                                     width: floor(max(frame.size.width, 0)), height: floor(max(frame.size.height, 0)))
-    }
-
     /// 웹 콘텐츠 영역(safe area를 피해 폴백 화면·웹뷰가 놓인 사각형) 네 모서리의 반지름을 pt로 정한다. 음수는 0으로 보고, 모두 0이면 자르지 않는다.
     /// 상단 띠와 컨테이너는 자르지 않으므로 풀스크린에서도 상태바 아래 웹 모서리가 둥글게 보인다.
     /// 풀스크린의 아래 모서리는 웹이 홈 인디케이터 뒤까지 채우므로 물리 화면 모서리와 겹친다.

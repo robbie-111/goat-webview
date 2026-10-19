@@ -218,37 +218,25 @@ public func goatwebview_stop_loading(_ gameObjectName: UnsafePointer<CChar>?) {
 
 // MARK: - 레이아웃·표시
 
-/// `relative`가 아니면 Unity 화면 픽셀(Screen.width 기준)로 받아, upstream getScale처럼 부모 뷰의
-/// contentScaleFactor로 나눠 포인트로 바꾼다. `relative`이면 부모 크기에 대한 비율(0...1)을 그대로 넘긴다.
-@_cdecl("goatwebview_set_margins")
-public func goatwebview_set_margins(_ gameObjectName: UnsafePointer<CChar>?, _ left: Float, _ top: Float, _ right: Float, _ bottom: Float, _ relative: Bool) {
-    MainActor.assumeIsolated {
-        guard let wrapper = GoatUnityWrapper.wrapper(gameObjectName) else { return }
-        let scale = relative ? 1 : wrapper.parentView.contentScaleFactor
-        wrapper.plugin.setMargins(left: CGFloat(left) / scale, top: CGFloat(top) / scale,
-                                  right: CGFloat(right) / scale, bottom: CGFloat(bottom) / scale,
-                                  relative: relative)
-    }
-}
-
 /// Android unity-wrapper `setFrame`과 같다. 상단 safe area(상태바·노치)를 뺀 부모 뷰 영역에 대한 비율(0...1)이며,
 /// 원점은 safe area 바로 아래의 좌상단이다. 프레임이 safe area 아래에 놓이므로 컨테이너가 위쪽을 다시 비우지 않는다.
+/// Android 래퍼가 LayoutParams를 바꾸듯 컨테이너 frame을 직접 정한다. 결과는 내림하고 음수 크기는 0으로 둔다.
 @_cdecl("goatwebview_set_frame")
 public func goatwebview_set_frame(_ gameObjectName: UnsafePointer<CChar>?, _ x: Float, _ y: Float, _ width: Float, _ height: Float) {
     MainActor.assumeIsolated {
-        guard let wrapper = GoatUnityWrapper.wrapper(gameObjectName) else { return }
+        guard let wrapper = GoatUnityWrapper.wrapper(gameObjectName),
+              let containerView = wrapper.plugin.containerView else { return }
         let bounds = wrapper.parentView.bounds
         let safeTop = min(wrapper.parentView.safeAreaInsets.top, bounds.height)
         let available = bounds.height - safeTop
-        let left = CGFloat(x) * bounds.width
-        let top = safeTop + CGFloat(y) * available
-        let right = bounds.width - left - CGFloat(width) * bounds.width
-        let bottom = bounds.height - top - CGFloat(height) * available
-        wrapper.plugin.setMargins(left: left, top: top, right: right, bottom: bottom, relative: false)
+        containerView.frame = CGRect(x: floor(CGFloat(x) * bounds.width),
+                                     y: floor(safeTop + CGFloat(y) * available),
+                                     width: floor(max(CGFloat(width) * bounds.width, 0)),
+                                     height: floor(max(CGFloat(height) * available, 0)))
     }
 }
 
-/// Unity 화면 픽셀을 받아 set_margins처럼 부모 뷰의 contentScaleFactor로 나눠 pt로 바꾼다.
+/// Unity 화면 픽셀을 받아 부모 뷰의 contentScaleFactor로 나눠 pt로 바꾼다(upstream getScale).
 @_cdecl("goatwebview_set_round_corner_radius")
 public func goatwebview_set_round_corner_radius(_ gameObjectName: UnsafePointer<CChar>?, _ topLeft: Float, _ topRight: Float,
                                                 _ bottomLeft: Float, _ bottomRight: Float) {

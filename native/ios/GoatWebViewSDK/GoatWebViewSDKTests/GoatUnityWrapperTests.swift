@@ -122,7 +122,7 @@ final class GoatUnityWrapperTests: XCTestCase {
         goatwebview_load_html("a", nil, nil)
         goatwebview_evaluate_js("a", 1, nil)
         goatwebview_go_back(nil)
-        goatwebview_set_margins("missing", 1, 2, 3, 4, false)
+        goatwebview_set_frame("missing", 0, 0, 1, 1)
         XCTAssertFalse(goatwebview_can_go_back("missing"))
         XCTAssertFalse(goatwebview_can_go_forward(nil))
         goatwebview_dispose("missing")
@@ -145,20 +145,21 @@ final class GoatUnityWrapperTests: XCTestCase {
         XCTAssertTrue(goatwebview_create("a", nil), "해제한 GameObject 이름은 다시 쓸 수 있다")
     }
 
-    func testSetMarginsConvertsPixelsToPoints() throws {
+    func testSetFrameUsesRatioBelowTopSafeArea() throws {
         XCTAssertTrue(goatwebview_create("a", nil))
         let wrapper = try XCTUnwrap(GoatUnityWrapper.wrappers["a"])
         let container = try XCTUnwrap(wrapper.plugin.containerView)
-        wrapper.parentView.contentScaleFactor = 3
         let bounds = wrapper.parentView.bounds
+        let safeTop = min(wrapper.parentView.safeAreaInsets.top, bounds.height)
+        let available = bounds.height - safeTop
 
-        goatwebview_set_margins("a", 30, 60, 90, 120, false)
-        XCTAssertEqual(container.frame, CGRect(x: 10, y: 20, width: floor(bounds.width - 40), height: floor(bounds.height - 60)))
+        goatwebview_set_frame("a", 0.1, 0.2, 0.8, 0.5)
+        XCTAssertEqual(container.frame, CGRect(x: floor(bounds.width * 0.1), y: floor(safeTop + available * 0.2),
+                                               width: floor(bounds.width * 0.8), height: floor(available * 0.5)))
 
-        // 비율은 배율과 무관하다.
-        goatwebview_set_margins("a", 0.1, 0, 0, 0.5, true)
-        XCTAssertEqual(container.frame, CGRect(x: floor(bounds.width * 0.1), y: 0,
-                                               width: floor(bounds.width * 0.9), height: floor(bounds.height * 0.5)))
+        // 음수 크기는 0이다.
+        goatwebview_set_frame("a", 0, 0, -1, -1)
+        XCTAssertEqual(container.frame.size, .zero)
     }
 
     // MARK: - 도우미

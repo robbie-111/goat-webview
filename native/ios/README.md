@@ -56,7 +56,6 @@ import GoatWebViewSDK
 
 let plugin = WebViewPlugin(parentView: hostView, allowedOrigins: ["https://example.com"])
 plugin.delegate = self                 // WebViewPluginDelegate
-plugin.setMargins(left: 0, top: 0, right: 0, bottom: 0, relative: false)
 plugin.setVisibility(true)             // 처음에는 숨겨져 있다
 plugin.setScrollBounceEnabled(false)
 plugin.loadURL("https://example.com/page")
@@ -78,7 +77,6 @@ plugin.dispose()
 | `evaluateJS(_:completionHandler:)` | 결과를 JSON 문자열로 넘깁니다(문자열이면 따옴표 포함). 오류·`undefined`·함수·`NaN`·`Infinity`·`Date`는 `nil`. `dispose()` 뒤에는 완료 처리기를 부르지 않습니다 |
 | `canGoBack`, `canGoForward` | 방문 기록 상태 |
 | `goBack()`, `goForward()`, `reload()`, `stopLoading()` | 탐색 |
-| `setMargins(left:top:right:bottom:relative:)` | 부모 뷰 기준 여백. `relative`이면 부모 크기에 대한 비율(0...1), 아니면 포인트. 결과는 내림하고, 여백이 부모보다 크면 크기 0 |
 | `setVisibility(_:)` | 컨테이너(폴백 화면 + 웹뷰)를 보이거나 숨깁니다 |
 | `setTopSafeAreaColor(r:g:b:a:)` | 컨테이너 위쪽 safe area(상태바·노치 영역)를 (r, g, b, a) 색(각 0...1)으로 칠합니다. 폴백 화면과 웹뷰는 색과 상관없이 위쪽 safe area 중 컨테이너와 겹치는 부분을 비우고 그 아래부터 채우며, 좌우 safe area(가로 모드 노치)도 피합니다. 아래쪽 safe area(홈 인디케이터) 뒤는 채웁니다. safe area와 겹치지 않는 팝업형 컨테이너는 줄지 않습니다(Android와 같음). `a`가 0이면(기본값) 칠하지 않고 투명하게 비웁니다. Android와 같은 원시 타입 시그니처라 Unity C#의 `Color`를 그대로 넘길 수 있습니다. 상태바 아이콘 색은 호스트의 뷰 컨트롤러가 정합니다 |
 | `setScrollBounceEnabled(_:)` | 스크롤 끝에서 튕기는 효과(`scrollView.bounces`). 기본은 켜짐 |
@@ -107,7 +105,7 @@ DEBUG 빌드에서는 iOS 16.4 이상에서 Safari 웹 검사기로 볼 수 있�
 | --- | --- |
 | `_CWebViewPlugin_Init(gameObjectName, transparent, zoom, ua, …)` + `UnityGetGLViewController().view` | `WebViewPlugin(parentView:allowedOrigins:)`. 부모 뷰는 호스트가 넘기고, 초기화 옵션은 없습니다 |
 | `_CWebViewPlugin_Destroy` | `dispose()` |
-| `_CWebViewPlugin_SetMargins` | `setMargins(left:top:right:bottom:relative:)` |
+| `_CWebViewPlugin_SetMargins` | 없음. 컨테이너는 부모 뷰를 채우며, Unity에서는 `goatwebview_set_frame`이 위치·크기를 정합니다 |
 | `_CWebViewPlugin_SetVisibility` | `setVisibility(_:)` |
 | `_CWebViewPlugin_LoadURL`, `_LoadHTML` | `loadURL(_:)`, `loadHTML(_:baseURL:)` |
 | `_CWebViewPlugin_EvaluateJS` | `evaluateJS(_:completionHandler:)`. upstream은 결과를 돌려주지 않습니다 |
@@ -131,7 +129,7 @@ DEBUG 빌드에서는 iOS 16.4 이상에서 Safari 웹 검사기로 볼 수 있�
 | Android (`com.goatwebview.sdk`) | iOS |
 | --- | --- |
 | `WebViewController(context, WebViewConfig(allowedMessageOrigins), listener)` | `WebViewPlugin(parentView:allowedOrigins:)` + `delegate` |
-| `view`를 호스트가 배치 | SDK가 `parentView`에 붙이고 `setMargins`로 배치 |
+| `view`를 호스트가 배치 | SDK가 `parentView`에 붙여 부모 뷰를 채움(배치는 부모 뷰로 호스트가 정함) |
 | `loadUrl`, `loadHtml` (잘못된 URL은 예외) | `loadURL`, `loadHTML` (잘못된 URL은 `didFailWithError`) |
 | `evaluateJavaScript(script, onResult)` | `evaluateJS(_:completionHandler:)` |
 | `goBack`, `goForward`, `reload`, `stopLoading` | 같음 |
@@ -150,7 +148,6 @@ DEBUG 빌드에서는 iOS 16.4 이상에서 Safari 웹 검사기로 볼 수 있�
 | `MessageBridgeUnavailable`, `requestInterceptor`, `documentStartScripts`, `currentUrl`, `isDestroyed` | 없음 |
 | `setTopSafeAreaColor(r, g, b, a)`, 상단 safe area 항상 비움, 3버튼 바·측면 컷아웃 회피 | `setTopSafeAreaColor(r:g:b:a:)` (같은 원시 타입 시그니처), 상단 safe area 항상 비움, 좌우 safe area 회피. 홈 인디케이터 뒤는 채움(Android 제스처 핸들과 같음) |
 | 폴백 화면, `Closed` 이벤트 | 폴백 화면, `webViewPluginDidClose` (같은 동작. Android는 뒤로·앞으로 캐시의 HTTP 오류 문서를 다시 실패로 보지 않음) |
-| 없음 | `setMargins` |
 
 ## 폴백 화면
 
@@ -252,7 +249,6 @@ Unity 헤더를 쓰지 않으므로 SDK 빌드·테스트에 그대로 포함됩
 | `goatwebview_evaluate_js(gameObjectName, requestId, js)` | `requestId`는 `int`. 결과를 `OnJavaScriptResult`로 보냅니다 |
 | `goatwebview_can_go_back(gameObjectName)`, `goatwebview_can_go_forward(gameObjectName)` | 방문 기록 상태 |
 | `goatwebview_go_back`, `go_forward`, `reload`, `stop_loading` | 탐색 |
-| `goatwebview_set_margins(gameObjectName, l, t, r, b, relative)` | `relative`가 아니면 화면 픽셀을 부모 뷰 `contentScaleFactor`로 나눠 포인트로 바꿉니다(upstream `getScale`) |
 | `goatwebview_set_frame(gameObjectName, x, y, w, h)` | Android `setFrame`과 같습니다. 상단 safe area를 뺀 부모 뷰 영역에 대한 비율(0...1), 원점은 safe area 바로 아래 좌상단 |
 | `goatwebview_set_round_corner_radius(gameObjectName, tl, tr, bl, br)` | Unity 화면 픽셀을 `contentScaleFactor`로 나눠 pt로 바꿔 `setRoundCornerRadius`를 부릅니다 |
 | `goatwebview_get_url(gameObjectName)` | 현재 URL을 `strdup`한 문자열로 돌려줍니다(C#이 해제). 없으면 NULL |
