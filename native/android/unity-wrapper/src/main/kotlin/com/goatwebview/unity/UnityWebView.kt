@@ -9,6 +9,7 @@ import android.widget.FrameLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.unity3d.player.UnityPlayer
+import com.goatwebview.sdk.FallbackTheme
 import com.goatwebview.sdk.WebViewCache
 import com.goatwebview.sdk.WebViewController
 import com.goatwebview.sdk.WebViewEvent
@@ -94,6 +95,11 @@ class UnityWebView internal constructor(
 
     /** 앱의 모든 웹뷰가 공유하는 캐시를 비운다. [includeDiskFiles]가 false면 메모리 캐시만 비운다. */
     fun clearCache(includeDiskFiles: Boolean) = withController { it.clearCache(includeDiskFiles) }
+
+    /** 폴백 화면 테마. 0 LIGHT(기본), 1 DARK, 2 SYSTEM. 범위를 벗어나면 INVALID_CALL로 알린다. */
+    fun setFallbackTheme(theme: Int) = withController {
+        it.setFallbackTheme(FallbackTheme.entries.getOrNull(theme) ?: throw IllegalArgumentException("알 수 없는 폴백 테마입니다: $theme"))
+    }
 
     fun setTopSafeAreaColor(r: Float, g: Float, b: Float, a: Float) = withController { it.setTopSafeAreaColor(r, g, b, a) }
 

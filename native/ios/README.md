@@ -79,6 +79,7 @@ plugin.dispose()
 | `canGoBack`, `canGoForward` | 방문 기록 상태 |
 | `goBack()`, `goForward()`, `reload()`, `stopLoading()` | 탐색 |
 | `setVisibility(_:)` | 컨테이너(폴백 화면 + 웹뷰)를 보이거나 숨깁니다 |
+| `setFallbackTheme(_:)` | 폴백 화면 테마 `.light`(기본)·`.dark`·`.system`. [폴백 화면](#폴백-화면) 참고 |
 | `setTopSafeAreaColor(r:g:b:a:)` | 컨테이너 위쪽 safe area(상태바·노치 영역)를 (r, g, b, a) 색(각 0...1)으로 칠합니다. 폴백 화면과 웹뷰는 색과 상관없이 위쪽 safe area 중 컨테이너와 겹치는 부분을 비우고 그 아래부터 채우며, 좌우 safe area(가로 모드 노치)도 피합니다. 아래쪽 safe area(홈 인디케이터) 뒤는 채웁니다. safe area와 겹치지 않는 팝업형 컨테이너는 줄지 않습니다(Android와 같음). `a`가 0이면(기본값) 칠하지 않고 투명하게 비웁니다. Android와 같은 원시 타입 시그니처라 Unity C#의 `Color`를 그대로 넘길 수 있습니다. 상태바 아이콘 색은 호스트의 뷰 컨트롤러가 정합니다 |
 | `setScrollBounceEnabled(_:)` | 스크롤 끝에서 튕기는 효과(`scrollView.bounces`). 기본은 켜짐 |
 | `setRoundCornerRadius(topLeft:topRight:bottomLeft:bottomRight:)` | 웹 콘텐츠 영역(safe area를 피해 폴백 화면·웹뷰를 담은 `contentView`) 네 모서리 반지름(pt). 상단 띠와 컨테이너는 자르지 않으므로 풀스크린에서도 상태바 아래 웹 모서리가 보입니다. 음수는 0, 모두 0이면 자르지 않음. 같으면 `layer.cornerRadius`, 다르면 `CAShapeLayer` 마스크. Android와 같은 원시 타입 시그니처(Android는 px) |
@@ -153,6 +154,8 @@ DEBUG 빌드에서는 iOS 16.4 이상에서 Safari 웹 검사기로 볼 수 있�
 ## 폴백 화면
 
 컨테이너 안에서 웹뷰 아래에 깔리는 네이티브 화면입니다. 배경은 `systemBackground`, 가운데에 로딩 표시 또는 경고 아이콘(`exclamationmark.triangle`)이 있고, 오른쪽 위 safe area 안에 44pt 닫기 버튼(`xmark`, 접근성 라벨 `Close`)이 항상 보입니다. 문구는 없습니다.
+
+테마는 `setFallbackTheme(_:)`로 `.light`(기본), `.dark`, `.system` 중에서 고릅니다. 색은 시스템 색 그대로이고 `overrideUserInterfaceStyle`로 라이트·다크를 고정하며, `.system`은 시스템 다크 모드를 실행 중에도 따릅니다.
 
 | 상태 | 언제 | 웹뷰 |
 | --- | --- | --- |
@@ -256,6 +259,7 @@ Unity 헤더를 쓰지 않으므로 SDK 빌드·테스트에 그대로 포함됩
 | `goatwebview_get_url(gameObjectName)` | 현재 URL을 `strdup`한 문자열로 돌려줍니다(C#이 해제). 없으면 NULL |
 | `goatwebview_set_scroll_bounce_enabled`, `goatwebview_clear_cache()`, `goatwebview_set_forward_web_console_to_native_output(bool)` | `setScrollBounceEnabled`, `WebViewCache.clear`, `setForwardWebConsoleToNativeOutput` |
 | `goatwebview_set_visibility`, `set_top_safe_area_color`, `set_suspended` | 같은 이름의 SDK API |
+| `goatwebview_set_fallback_theme(gameObjectName, theme)` | `theme`은 `int` 0 light, 1 dark, 2 system. 범위 밖이면 무시 |
 
 이벤트는 `UnitySendMessage(gameObjectName, 메서드 이름, JSON)`으로 보냅니다. 메서드 이름과 JSON 필드는 Android `unity-wrapper`(UniWebView 이벤트 이름)와 같으며, 그 GameObject의 컴포넌트가 아래 메서드를 `string` 인자 하나로 받습니다. 값이 없는 필드는 `null`입니다.
 

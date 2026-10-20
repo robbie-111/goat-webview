@@ -2,7 +2,16 @@ import UIKit
 
 // MARK: - FallbackView
 
+/// 폴백 화면(로드 전·실패 시 보이는 화면과 닫기 버튼)의 테마. 기본은 `light`이고 `system`은 시스템 다크 모드를 따른다.
+/// Unity 래퍼와는 rawValue(0 light, 1 dark, 2 system)로 주고받는다.
+public enum FallbackTheme: Int {
+    case light
+    case dark
+    case system
+}
+
 /// 웹뷰가 로드되기 전과 실패했을 때 보이는 화면. 닫기 버튼은 항상 보인다.
+/// 색은 시스템 색이고 `theme`으로 라이트·다크를 정한다.
 final class FallbackView: UIView {
     enum State {
         case loading
@@ -12,6 +21,9 @@ final class FallbackView: UIView {
 
     var state: State = .loading {
         didSet { updateState() }
+    }
+    var theme: FallbackTheme = .light {
+        didSet { applyTheme() }
     }
     var closeHandler: (() -> Void)?
 
@@ -50,12 +62,21 @@ final class FallbackView: UIView {
             closeButton.widthAnchor.constraint(equalToConstant: 44),
             closeButton.heightAnchor.constraint(equalToConstant: 44),
         ])
+        applyTheme()
         updateState()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    private func applyTheme() {
+        switch theme {
+        case .light: overrideUserInterfaceStyle = .light
+        case .dark: overrideUserInterfaceStyle = .dark
+        case .system: overrideUserInterfaceStyle = .unspecified
+        }
     }
 
     private func updateState() {

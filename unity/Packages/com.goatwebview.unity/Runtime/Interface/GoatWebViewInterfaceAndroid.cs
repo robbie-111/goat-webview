@@ -50,6 +50,7 @@ internal static class NativeInterface
     public static string GetUrl(string name) => webViews.TryGetValue(name, out var webView) ? webView.Call<string>("getUrl") : null;
     public static void SetVisibility(string name, bool visible) => Call(name, "setVisible", visible);
     public static void SetFrame(string name, float x, float y, float width, float height) => Call(name, "setFrame", x, y, width, height);
+    public static void SetFallbackTheme(string name, int theme) => Call(name, "setFallbackTheme", theme);
     public static void SetTopSafeAreaColor(string name, float r, float g, float b, float a) => Call(name, "setTopSafeAreaColor", r, g, b, a);
 
     public static void SetRoundCornerRadius(string name, float topLeft, float topRight, float bottomLeft, float bottomRight) =>

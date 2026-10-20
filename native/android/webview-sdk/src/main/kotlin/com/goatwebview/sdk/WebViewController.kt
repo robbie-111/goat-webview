@@ -257,6 +257,12 @@ class WebViewController(
         installMessageBridge(origins)
     }
 
+    /** 폴백 화면(로드 전·실패 시 보이는 화면과 닫기 버튼) 테마. 기본 [FallbackTheme.LIGHT]. */
+    fun setFallbackTheme(theme: FallbackTheme) {
+        checkActive()
+        fallbackView.theme = theme
+    }
+
     /**
      * 메시지를 받을 출처를 바꾼다. 지금 페이지에는 적용되지 않고 다음 탐색부터 적용된다.
      * 문서 시작 스크립트도 새 출처로 다시 건다. 빈 집합이면 메시지 브리지와 문서 시작 스크립트를 내린다.

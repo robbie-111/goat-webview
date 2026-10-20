@@ -32,6 +32,7 @@ internal static class NativeInterface
     public static string GetUrl(string name) => null;
     public static void SetVisibility(string name, bool visible) { }
     public static void SetFrame(string name, float x, float y, float width, float height) { }
+    public static void SetFallbackTheme(string name, int theme) { }
     public static void SetTopSafeAreaColor(string name, float r, float g, float b, float a) { }
     public static void SetRoundCornerRadius(string name, float topLeft, float topRight, float bottomLeft, float bottomRight) { }
     public static void SetBouncesEnabled(string name, bool enabled) { }

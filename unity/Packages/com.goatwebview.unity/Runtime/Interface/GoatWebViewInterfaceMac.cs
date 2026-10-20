@@ -5,7 +5,7 @@ using UnityEngine;
 /// <summary>
 /// macOS Editor 확인용: GameObject마다 <see cref="GoatWebViewEditorView"/>를 붙여 <c>GoatWebView.bundle</c>을 부른다.
 /// 그리기·입력·메시지 꺼내기는 GoatWebViewEditorView가 맡는다.
-/// 출처 검사, 상단 safe area 색, 모서리 라운딩, 바운스, 캐시 비우기, Stop, 일시정지는 Editor에서 지원하지 않아 무시한다.
+/// 출처 검사, 폴백 테마, 상단 safe area 색, 모서리 라운딩, 바운스, 캐시 비우기, Stop, 일시정지는 Editor에서 지원하지 않아 무시한다.
 /// </summary>
 internal static class NativeInterface
 {
@@ -41,6 +41,7 @@ internal static class NativeInterface
     public static string GetUrl(string name) => View(name)?.Url;
     public static void SetVisibility(string name, bool visible) => View(name)?.SetVisible(visible);
     public static void SetFrame(string name, float x, float y, float width, float height) => View(name)?.SetFrame(new Rect(x, y, width, height));
+    public static void SetFallbackTheme(string name, int theme) { }
     public static void SetTopSafeAreaColor(string name, float r, float g, float b, float a) { }
     public static void SetRoundCornerRadius(string name, float topLeft, float topRight, float bottomLeft, float bottomRight) { }
     public static void SetBouncesEnabled(string name, bool enabled) { }

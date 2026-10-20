@@ -293,6 +293,15 @@ public func goatwebview_set_visibility(_ gameObjectName: UnsafePointer<CChar>?, 
     }
 }
 
+/// 폴백 화면 테마. 0 light(기본), 1 dark, 2 system. 범위를 벗어나면 무시한다.
+@_cdecl("goatwebview_set_fallback_theme")
+public func goatwebview_set_fallback_theme(_ gameObjectName: UnsafePointer<CChar>?, _ theme: Int32) {
+    MainActor.assumeIsolated {
+        guard let theme = FallbackTheme(rawValue: Int(theme)) else { return }
+        GoatUnityWrapper.wrapper(gameObjectName)?.plugin.setFallbackTheme(theme)
+    }
+}
+
 @_cdecl("goatwebview_set_top_safe_area_color")
 public func goatwebview_set_top_safe_area_color(_ gameObjectName: UnsafePointer<CChar>?, _ r: Float, _ g: Float, _ b: Float, _ a: Float) {
     MainActor.assumeIsolated {

@@ -170,6 +170,15 @@ public class GoatWebView : MonoBehaviour
         if (nativeName != null) NativeInterface.Stop(nativeName);
     }
 
+    /// <summary>
+    /// 폴백 화면(로드 전·실패 시 웹뷰 자리에 보이는 화면과 닫기 버튼)의 테마. 기본 Light.
+    /// System은 기기의 다크 모드를 따른다. macOS Editor에서는 무시한다.
+    /// </summary>
+    public void SetFallbackTheme(GoatWebViewFallbackTheme theme)
+    {
+        if (nativeName != null) NativeInterface.SetFallbackTheme(nativeName, (int)theme);
+    }
+
     /// <summary>상단 safe area(상태바·노치)를 칠할 색. 알파가 0이면 칠하지 않는다.</summary>
     public void SetTopSafeAreaColor(Color color)
     {

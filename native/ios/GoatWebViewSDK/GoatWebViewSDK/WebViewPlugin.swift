@@ -139,6 +139,11 @@ public final class WebViewPlugin: NSObject {
         }
     }
 
+    /// 폴백 화면(로드 전·실패 시 보이는 화면과 닫기 버튼) 테마. 기본 `.light`.
+    public func setFallbackTheme(_ theme: FallbackTheme) {
+        fallbackView?.theme = theme
+    }
+
     /// `Unity.call`을 허용할 출처를 바꾼다. 지금 페이지에는 적용되지 않고 다음 탐색부터 적용된다.
     /// `nil`이면 출처를 제한하지 않고, 빈 배열이면 브리지를 설치하지 않는다.
     public func setAllowedOrigins(_ origins: [String]?) {

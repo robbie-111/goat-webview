@@ -38,6 +38,7 @@ internal static class NativeInterface
 
     public static void SetVisibility(string name, bool visible) => goatwebview_set_visibility(name, visible);
     public static void SetFrame(string name, float x, float y, float width, float height) => goatwebview_set_frame(name, x, y, width, height);
+    public static void SetFallbackTheme(string name, int theme) => goatwebview_set_fallback_theme(name, theme);
     public static void SetTopSafeAreaColor(string name, float r, float g, float b, float a) => goatwebview_set_top_safe_area_color(name, r, g, b, a);
 
     public static void SetRoundCornerRadius(string name, float topLeft, float topRight, float bottomLeft, float bottomRight) =>
@@ -65,6 +66,7 @@ internal static class NativeInterface
     [DllImport("__Internal")] static extern IntPtr goatwebview_get_url([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
     [DllImport("__Internal")] static extern void goatwebview_set_visibility([MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.I1)] bool visible);
     [DllImport("__Internal")] static extern void goatwebview_set_frame([MarshalAs(UnmanagedType.LPUTF8Str)] string name, float x, float y, float width, float height);
+    [DllImport("__Internal")] static extern void goatwebview_set_fallback_theme([MarshalAs(UnmanagedType.LPUTF8Str)] string name, int theme);
     [DllImport("__Internal")] static extern void goatwebview_set_top_safe_area_color([MarshalAs(UnmanagedType.LPUTF8Str)] string name, float r, float g, float b, float a);
     [DllImport("__Internal")] static extern void goatwebview_set_round_corner_radius([MarshalAs(UnmanagedType.LPUTF8Str)] string name, float topLeft, float topRight, float bottomLeft, float bottomRight);
     [DllImport("__Internal")] static extern void goatwebview_set_scroll_bounce_enabled([MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.I1)] bool enabled);
