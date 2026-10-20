@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// 네이티브가 <c>UnitySendMessage(GameObject 이름, 메서드 이름, JSON)</c>으로 보내는 이벤트를 받아
-/// <see cref="Owner"/>로 넘긴다. GoatWebView가 웹뷰마다 만드는 GUID 이름의 숨긴 GameObject에 붙으며 직접 추가하지 않는다.
+/// <see cref="Owner"/>로 넘긴다. GoatWebView가 웹뷰마다 만드는 GUID 이름의 루트 GameObject에 붙으며 직접 추가하지 않는다.
 /// 메서드 이름(OnPageStarted 등)이 GoatWebView의 C# 이벤트 이름과 같아 별도 컴포넌트로 둔다.
 /// </summary>
 [AddComponentMenu("")]

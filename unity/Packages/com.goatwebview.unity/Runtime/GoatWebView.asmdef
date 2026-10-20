@@ -1,3 +1,6 @@
 {
-    "name": "GoatWebView"
+    "name": "GoatWebView",
+    "references": [
+        "UnityEngine.UI"
+    ]
 }

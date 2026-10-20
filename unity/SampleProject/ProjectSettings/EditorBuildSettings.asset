@@ -8,5 +8,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/WebViewSample/Scenes/SampleScene.unity
     guid: e25c18e786ae14b318d28f7f6d77fee5
+  - enabled: 1
+    path: Assets/WebViewSample/Scenes/PrefabSample.unity
+    guid: 41dbe03194f504a4487b85f2166274ab
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

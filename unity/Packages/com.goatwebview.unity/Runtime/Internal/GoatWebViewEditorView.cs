@@ -28,6 +28,7 @@ using System.Runtime.InteropServices;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
 
 /// <summary>
 /// macOS Editor에서 <c>GoatWebView.bundle</c>을 쓰는 확인용 웹뷰. 번들은 화면 밖 창의 WKWebView를 비트맵으로 주므로
@@ -48,6 +49,8 @@ internal sealed class GoatWebViewEditorView : MonoBehaviour
     Texture2D texture;
     bool hasFocus;
     string inputString = "";
+    GameObject blockerCanvas;
+    RectTransform blocker;
 
     internal string Url { get; private set; }
     internal bool CanGoBack => instance != IntPtr.Zero && _CWebViewPlugin_CanGoBack(instance);
@@ -58,6 +61,7 @@ internal sealed class GoatWebViewEditorView : MonoBehaviour
         _CWebViewPlugin_InitStatic(true, SystemInfo.graphicsDeviceType == GraphicsDeviceType.Metal);
         instance = _CWebViewPlugin_Init(gameObject.name, false, false, Screen.width, Screen.height, null, false);
         _CWebViewPlugin_SetVisibility(instance, false);
+        CreateBlocker();
         ApplyRect();
     }
 
@@ -69,6 +73,7 @@ internal sealed class GoatWebViewEditorView : MonoBehaviour
             instance = IntPtr.Zero;
         }
         if (texture != null) Destroy(texture);
+        if (blockerCanvas != null) Destroy(blockerCanvas);
     }
 
     void OnApplicationFocus(bool focus)
@@ -86,6 +91,7 @@ internal sealed class GoatWebViewEditorView : MonoBehaviour
     internal void SetVisible(bool value)
     {
         visible = value;
+        blockerCanvas.SetActive(value);
         _CWebViewPlugin_SetVisibility(instance, value);
     }
 
@@ -107,7 +113,26 @@ internal sealed class GoatWebViewEditorView : MonoBehaviour
         var top = safeTop + r.y * available;
         rect = new Rect(r.x * width, height - top - h, w, h);
         appliedSize = new Vector2Int(Screen.width, Screen.height);
+        // 좌하단 원점 화면 픽셀. 차단 Canvas에는 스케일러가 없어 1단위가 1px이다.
+        blocker.anchoredPosition = rect.position;
+        blocker.sizeDelta = rect.size;
         _CWebViewPlugin_SetRect(instance, Mathf.Max((int)w, 1), Mathf.Max((int)h, 1));
+    }
+
+    // 웹뷰는 OnGUI로 그린 텍스처라 uGUI 레이캐스트에 잡히지 않는다. 기기처럼 웹뷰 영역의 클릭이 아래 UI로 가지 않도록
+    // 맨 위 Overlay Canvas에 투명 Image를 둔다.
+    void CreateBlocker()
+    {
+        blockerCanvas = new GameObject("InputBlocker", typeof(Canvas), typeof(GraphicRaycaster));
+        blockerCanvas.transform.SetParent(transform, false);
+        var canvas = blockerCanvas.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = short.MaxValue;
+        blocker = (RectTransform)new GameObject("Blocker", typeof(RectTransform), typeof(Image)).transform;
+        blocker.SetParent(blockerCanvas.transform, false);
+        blocker.anchorMin = blocker.anchorMax = blocker.pivot = Vector2.zero;
+        blocker.GetComponent<Image>().color = Color.clear;
+        blockerCanvas.SetActive(false);
     }
 
     void Update()

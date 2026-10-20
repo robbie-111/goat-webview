@@ -12,6 +12,7 @@
         "webview"
     ],
     "dependencies": {
-        "com.unity.nuget.newtonsoft-json": "3.2.1"
+        "com.unity.nuget.newtonsoft-json": "3.2.1",
+        "com.unity.ugui": "1.0.0"
     }
 }
