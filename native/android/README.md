@@ -79,7 +79,7 @@ native/android/
 
 `unity-wrapper`는 `webview-sdk`를 참조하며, `webview-sdk`는 Unity를 알지 못합니다. Unity `classes.jar`는 `compileOnly`로만 참조하므로 AAR에 포함되지 않습니다. 기기 테스트는 UnitySendMessage 대신 전송 내용을 받아 Unity 없이 실행합니다.
 
-- C#은 웹뷰 컴포넌트를 붙인 GameObject의 이름으로 `AndroidJavaObject("com.goatwebview.unity.UnityWebView", gameObjectName, allowedMessageOrigins, documentStartScripts)`를 생성합니다. 경계에는 원시 타입·문자열·문자열 배열만 사용합니다.
+- C#은 웹뷰마다 고유한 이름의 리스너 GameObject를 만들고 그 이름으로 `AndroidJavaObject("com.goatwebview.unity.UnityWebView", gameObjectName)`를 생성합니다. 메시지 브리지는 `setAllowedMessageOrigins(origins)`로 출처를 정하기 전까지 없고, 바꾼 출처는 다음 탐색부터 적용됩니다. 잘못된 출처는 `INVALID_CALL`로 알립니다. 경계에는 원시 타입·문자열·문자열 배열만 사용합니다.
 - 웹뷰는 Unity Activity의 `android.R.id.content`에 숨긴 상태로 붙으며 `setVisible(true)`로 보여 줍니다. `setFrame(x, y, width, height)`는 상단 safe area를 뺀 콘텐츠 영역에 대한 비율(0..1)이며, 원점은 safe area 바로 아래의 좌상단입니다. `(0, 0, 1, 1)`은 상태바 아래부터 화면 끝까지입니다. 호출 시점의 크기로 계산하므로 회전 후에는 다시 호출합니다. 공개 메서드는 어느 스레드에서 호출해도 메인 스레드로 넘겨 호출 순서대로 실행합니다.
 - 이벤트는 `UnitySendMessage(gameObjectName, 메서드 이름, json)`으로 GameObject의 메서드를 호출해 보내며 Unity 메인 스레드에서 처리됩니다. 메서드 이름은 UniWebView 이벤트 이름을 따르고, 인자는 이벤트별 필드를 담은 JSON 문자열입니다.
 

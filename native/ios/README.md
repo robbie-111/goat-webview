@@ -72,6 +72,7 @@ plugin.dispose()
 | --- | --- |
 | `init(parentView:allowedOrigins:)` | `parentView` 전체 크기로 컨테이너를 붙이고, 그 안에 폴백 화면과 `WKWebView`를 겹쳐 둡니다. 컨테이너는 숨긴 상태로 시작합니다. `allowedOrigins`는 [JS 브리지](#js-브리지) 참고 |
 | `delegate` | `weak`. 이벤트를 받는 `WebViewPluginDelegate` |
+| `setAllowedOrigins(_:)` | 허용 출처를 바꿉니다. 지금 페이지에는 적용되지 않고 다음 탐색부터 적용됩니다. 값의 의미는 `init`의 `allowedOrigins`와 같습니다 |
 | `loadURL(_:)` | http(s)만 받습니다. 경로·쿼리·프래그먼트의 공백과 비ASCII 문자만 퍼센트 인코딩하고 `#`·기존 `%xx`는 그대로 둡니다. 그 밖의 URL은 `didFailWithError(.invalidURL)`와 폴백 실패 화면 |
 | `loadHTML(_:baseURL:)` | `baseURL`(http(s)만)은 상대 경로와 메시지 출처 판정에 씁니다 |
 | `evaluateJS(_:completionHandler:)` | 결과를 JSON 문자열로 넘깁니다(문자열이면 따옴표 포함). 오류·`undefined`·함수·`NaN`·`Infinity`·`Date`는 `nil`. `dispose()` 뒤에는 완료 처리기를 부르지 않습니다 |
@@ -243,7 +244,8 @@ Unity 헤더를 쓰지 않으므로 SDK 빌드·테스트에 그대로 포함됩
 
 | 함수 | 동작 |
 | --- | --- |
-| `goatwebview_create(gameObjectName, allowedOrigins)` | `allowedOrigins`는 `\n` 구분, NULL이면 제한 없음. 부모 뷰가 없거나 이름이 NULL이거나 겹치면 `false` |
+| `goatwebview_create(gameObjectName)` | 메시지 브리지 없이 만듭니다. 부모 뷰가 없거나 이름이 NULL이거나 겹치면 `false` |
+| `goatwebview_set_allowed_message_origins(gameObjectName, allowedOrigins)` | `allowedOrigins`는 `\n` 구분, 빈 문자열이면 브리지를 내립니다. 다음 탐색부터 적용됩니다 |
 | `goatwebview_dispose(gameObjectName)` | `dispose()` 후 이름을 비웁니다. 여러 번 불러도 안전합니다 |
 | `goatwebview_load_url(gameObjectName, url)`, `goatwebview_load_html(gameObjectName, html, baseUrl)` | `loadURL`, `loadHTML` |
 | `goatwebview_evaluate_js(gameObjectName, requestId, js)` | `requestId`는 `int`. 결과를 `OnJavaScriptResult`로 보냅니다 |

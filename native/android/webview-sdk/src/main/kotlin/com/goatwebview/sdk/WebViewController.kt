@@ -79,6 +79,7 @@ class WebViewController(
     // 지금 메인 문서의 HTTP 상태. 새 탐색이 시작되면 200으로 되돌린다.
     private var mainFrameStatus = 200
     private val scriptHandlers = mutableListOf<ScriptHandler>()
+    private val documentStartScripts = config.documentStartScripts
 
     @Volatile
     var isDestroyed: Boolean = false
@@ -90,7 +91,8 @@ class WebViewController(
             return containerView
         }
 
-    val isMessageBridgeAvailable: Boolean
+    var isMessageBridgeAvailable: Boolean = false
+        private set
 
     val currentUrl: String?
         get() {
@@ -252,12 +254,25 @@ class WebViewController(
             }
         }
 
+        installMessageBridge(origins)
+    }
+
+    /**
+     * 메시지를 받을 출처를 바꾼다. 지금 페이지에는 적용되지 않고 다음 탐색부터 적용된다.
+     * 문서 시작 스크립트도 새 출처로 다시 건다. 빈 집합이면 메시지 브리지와 문서 시작 스크립트를 내린다.
+     */
+    fun setAllowedMessageOrigins(origins: Set<String>) {
+        checkActive()
+        WebViewConfig.requireValidOrigins(origins)
+        removeMessageBridge()
+        installMessageBridge(origins.toSet())
+    }
+
+    private fun installMessageBridge(origins: Set<String>) {
         val supportsMessages = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
-        val supportsScripts = config.documentStartScripts.isEmpty() ||
+        val supportsScripts = documentStartScripts.isEmpty() ||
             WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
-        isMessageBridgeAvailable = if (origins.isNotEmpty() &&
-            WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) && supportsScripts
-        ) {
+        isMessageBridgeAvailable = if (origins.isNotEmpty() && supportsMessages && supportsScripts) {
             WebViewCompat.addWebMessageListener(webView, BRIDGE_NAME, origins) {
                     _, message, origin, isMainFrame, _ ->
                 if (isMainFrame && message.type == WebMessageCompat.TYPE_STRING) {
@@ -266,7 +281,7 @@ class WebViewController(
             }
             bridgeInstalled = true
             if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-                for (script in config.documentStartScripts) {
+                for (script in documentStartScripts) {
                     scriptHandlers.add(WebViewCompat.addDocumentStartJavaScript(webView, script, origins))
                 }
             }
@@ -280,6 +295,18 @@ class WebViewController(
             }
             false
         }
+    }
+
+    private fun removeMessageBridge() {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            for (script in scriptHandlers) script.remove()
+        }
+        scriptHandlers.clear()
+        if (bridgeInstalled && WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            WebViewCompat.removeWebMessageListener(webView, BRIDGE_NAME)
+            bridgeInstalled = false
+        }
+        isMessageBridgeAvailable = false
     }
 
     fun loadUrl(url: String) {
@@ -392,14 +419,7 @@ class WebViewController(
         if (isDestroyed) return
         isDestroyed = true
         listener = null
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            for (script in scriptHandlers) script.remove()
-        }
-        scriptHandlers.clear()
-        if (bridgeInstalled && WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-            WebViewCompat.removeWebMessageListener(webView, BRIDGE_NAME)
-            bridgeInstalled = false
-        }
+        removeMessageBridge()
         ViewCompat.setOnApplyWindowInsetsListener(containerView, null)
         (containerView.parent as? ViewGroup)?.removeView(containerView)
         contentView.removeView(webView)

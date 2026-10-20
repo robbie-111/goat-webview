@@ -26,7 +26,12 @@ class WebViewConfig(
             "문서 시작 스크립트에는 허용 출처가 필요합니다."
         }
         require(this.documentStartScripts.all { it.isNotBlank() }) { "빈 스크립트는 등록할 수 없습니다." }
-        this.allowedMessageOrigins.forEach { origin ->
+        requireValidOrigins(this.allowedMessageOrigins)
+    }
+
+    internal companion object {
+        /** 경로 없는 정확한 HTTP(S) 출처인지 검사한다. 아니면 IllegalArgumentException을 던진다. */
+        fun requireValidOrigins(origins: Set<String>) = origins.forEach { origin ->
             val uri = runCatching { URI(origin) }.getOrNull()
             require(
                 uri != null &&

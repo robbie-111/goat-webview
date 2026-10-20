@@ -51,7 +51,8 @@ class UnityWebViewTest {
     }
 
     @Test fun eventsGoToTheGivenGameObjectInCallOrder() {
-        webView = UnityWebView(activity, "SupportWebView", arrayOf(ORIGIN), emptyArray())
+        webView = UnityWebView(activity, "SupportWebView")
+        webView.setAllowedMessageOrigins(arrayOf(ORIGIN))
         webView.loadHtml("<script>WebViewKit.postMessage('ready')</script>", "$ORIGIN/")
         await { has("OnMessageReceived") { it.getString("message") == "ready" && it.getString("origin") == ORIGIN } }
         await { has("OnPageFinished") { it.getString("url") == "$ORIGIN/" && it.getInt("statusCode") == 200 } }
@@ -62,7 +63,7 @@ class UnityWebViewTest {
     }
 
     @Test fun navigationStateIsQueriedWithoutEvents() {
-        webView = UnityWebView(activity, "WebView", emptyArray(), emptyArray())
+        webView = UnityWebView(activity, "WebView")
         assertFalse(webView.canGoBack())
         assertNull(webView.getUrl())
         webView.loadHtml("<p>first</p>", "$ORIGIN/first")
@@ -75,7 +76,7 @@ class UnityWebViewTest {
     }
 
     @Test fun startsHiddenUntilShown() {
-        webView = UnityWebView(activity, "WebView", emptyArray(), emptyArray())
+        webView = UnityWebView(activity, "WebView")
         instrumentation.waitForIdleSync()
         scenario.onActivity { assertEquals(View.INVISIBLE, container().visibility) }
         webView.setVisible(true)
@@ -84,7 +85,7 @@ class UnityWebViewTest {
     }
 
     @Test fun scrollBounceAndCacheCallsReachTheWebView() {
-        webView = UnityWebView(activity, "WebView", emptyArray(), emptyArray())
+        webView = UnityWebView(activity, "WebView")
         webView.setScrollBounceEnabled(false)
         webView.clearCache(true)
         instrumentation.waitForIdleSync()
@@ -96,19 +97,19 @@ class UnityWebViewTest {
     }
 
     @Test fun invalidCallsAreReportedInsteadOfCrashing() {
-        webView = UnityWebView(activity, "WebView", emptyArray(), emptyArray())
+        webView = UnityWebView(activity, "WebView")
         webView.loadUrl("file:///sdcard/index.html")
         await { has("OnLoadingErrorReceived") { it.getString("kind") == UnityWebView.INVALID_CALL && it.getInt("errorCode") == -1 } }
     }
 
-    @Test fun invalidConfigThrowsFromConstructor() {
-        assertThrows(IllegalArgumentException::class.java) {
-            UnityWebView(activity, "WebView", arrayOf("$ORIGIN/path"), emptyArray())
-        }
+    @Test fun invalidOriginsAreReportedAsInvalidCall() {
+        webView = UnityWebView(activity, "WebView")
+        webView.setAllowedMessageOrigins(arrayOf("$ORIGIN/path"))
+        await { has("OnLoadingErrorReceived") { it.getString("kind") == UnityWebView.INVALID_CALL } }
     }
 
     @Test fun frameUsesRatiosOfContentBelowTopSafeArea() {
-        webView = UnityWebView(activity, "WebView", emptyArray(), emptyArray())
+        webView = UnityWebView(activity, "WebView")
         webView.setFrame(0.1f, 0.2f, 0.5f, 0.25f)
         instrumentation.waitForIdleSync()
         // 레이아웃은 다음 프레임에 일어나므로 컨테이너가 새 위치에 놓일 때까지 기다린다.
@@ -139,7 +140,7 @@ class UnityWebViewTest {
     }
 
     @Test fun destroyDetachesViewAndIgnoresLaterCalls() {
-        webView = UnityWebView(activity, "WebView", emptyArray(), emptyArray())
+        webView = UnityWebView(activity, "WebView")
         webView.destroy()
         webView.destroy()
         webView.loadHtml("<p>ignored</p>", null)

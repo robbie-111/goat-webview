@@ -53,7 +53,8 @@ final class GoatUnityWrapperTests: XCTestCase {
     }
 
     func testCreateAttachesToKeyWindowAndSendsMessagesToGameObject() async throws {
-        XCTAssertTrue(goatwebview_create("a", nil))
+        XCTAssertTrue(goatwebview_create("a"))
+        goatwebview_set_allowed_message_origins("a", "https://example.com")
         let plugin = try XCTUnwrap(GoatUnityWrapper.wrappers["a"]?.plugin)
         XCTAssertTrue(plugin.containerView?.superview === window?.rootViewController?.view)
 
@@ -67,8 +68,10 @@ final class GoatUnityWrapperTests: XCTestCase {
     }
 
     func testAllowedOriginsAreSeparatedByNewline() async throws {
-        XCTAssertTrue(goatwebview_create("a", "https://a.example\nhttps://example.com"))
-        XCTAssertTrue(goatwebview_create("b", "https://other.example"))
+        XCTAssertTrue(goatwebview_create("a"))
+        XCTAssertTrue(goatwebview_create("b"))
+        goatwebview_set_allowed_message_origins("a", "https://a.example\nhttps://example.com")
+        goatwebview_set_allowed_message_origins("b", "https://other.example")
         for gameObjectName in ["a", "b"] {
             goatwebview_load_html(gameObjectName, "<script>window.Unity && Unity.call('hello');</script>", Self.baseURL)
         }
@@ -79,7 +82,7 @@ final class GoatUnityWrapperTests: XCTestCase {
     }
 
     func testEvaluateJSSendsResultWithRequestId() async throws {
-        XCTAssertTrue(goatwebview_create("a", nil))
+        XCTAssertTrue(goatwebview_create("a"))
         goatwebview_load_html("a", "<p>eval</p>", Self.baseURL)
         try await waitUntil { !self.messages("OnPageFinished", "a").isEmpty }
 
@@ -91,7 +94,7 @@ final class GoatUnityWrapperTests: XCTestCase {
     }
 
     func testInvalidURLSendsInvalidCall() throws {
-        XCTAssertTrue(goatwebview_create("a", nil))
+        XCTAssertTrue(goatwebview_create("a"))
         goatwebview_load_url("a", "ftp://example.com/file")
         XCTAssertEqual(fields("OnLoadingErrorReceived", "a"), [[
             "kind": "INVALID_CALL", "errorCode": -1,
@@ -100,7 +103,8 @@ final class GoatUnityWrapperTests: XCTestCase {
     }
 
     func testFallbackCloseButtonDestroysWebViewWithoutMessage() throws {
-        XCTAssertTrue(goatwebview_create("a", nil))
+        XCTAssertTrue(goatwebview_create("a"))
+        goatwebview_set_allowed_message_origins("a", "https://example.com")
         let plugin = try XCTUnwrap(GoatUnityWrapper.wrappers["a"]?.plugin)
         let container = try XCTUnwrap(plugin.containerView)
 
@@ -108,13 +112,13 @@ final class GoatUnityWrapperTests: XCTestCase {
         XCTAssertNil(container.superview, "백판과 웹뷰를 함께 해제한다")
         XCTAssertNil(GoatUnityWrapper.wrappers["a"])
         XCTAssertTrue(messages.isEmpty, "Unity에는 보내지 않는다")
-        XCTAssertTrue(goatwebview_create("a", nil), "같은 이름으로 다시 만들 수 있다")
+        XCTAssertTrue(goatwebview_create("a"), "같은 이름으로 다시 만들 수 있다")
     }
 
     func testInvalidIdentifiersAndNullArgumentsAreIgnored() throws {
-        XCTAssertTrue(goatwebview_create("a", nil))
-        XCTAssertFalse(goatwebview_create("a", nil), "이미 쓰는 GameObject 이름")
-        XCTAssertFalse(goatwebview_create(nil, nil))
+        XCTAssertTrue(goatwebview_create("a"))
+        XCTAssertFalse(goatwebview_create("a"), "이미 쓰는 GameObject 이름")
+        XCTAssertFalse(goatwebview_create(nil))
 
         // 없는 GameObject 이름과 NULL 인자는 아무 일도 하지 않는다.
         goatwebview_load_url("missing", "https://example.com/")
@@ -131,7 +135,8 @@ final class GoatUnityWrapperTests: XCTestCase {
     }
 
     func testDisposeRemovesWebViewAndStopsMessages() async throws {
-        XCTAssertTrue(goatwebview_create("a", nil))
+        XCTAssertTrue(goatwebview_create("a"))
+        goatwebview_set_allowed_message_origins("a", "https://example.com")
         let container = try XCTUnwrap(GoatUnityWrapper.wrappers["a"]?.plugin.containerView)
         goatwebview_load_html("a", "<script>setTimeout(function() { Unity.call('late'); }, 200);</script>", Self.baseURL)
         goatwebview_evaluate_js("a", 1, "1")
@@ -142,11 +147,11 @@ final class GoatUnityWrapperTests: XCTestCase {
         XCTAssertNil(container.superview)
         try await pause(0.6)
         XCTAssertTrue(messages.isEmpty)
-        XCTAssertTrue(goatwebview_create("a", nil), "해제한 GameObject 이름은 다시 쓸 수 있다")
+        XCTAssertTrue(goatwebview_create("a"), "해제한 GameObject 이름은 다시 쓸 수 있다")
     }
 
     func testSetFrameUsesRatioBelowTopSafeArea() throws {
-        XCTAssertTrue(goatwebview_create("a", nil))
+        XCTAssertTrue(goatwebview_create("a"))
         let wrapper = try XCTUnwrap(GoatUnityWrapper.wrappers["a"])
         let container = try XCTUnwrap(wrapper.plugin.containerView)
         let bounds = wrapper.parentView.bounds

@@ -1,0 +1,17 @@
+{
+    "name": "com.goatwebview.unity",
+    "version": "1.0.0",
+    "displayName": "Goat WebView for Unity",
+    "description": "WebView for Unity. Android and iOS use native WebView SDKs, and the macOS Editor uses an offscreen WKWebView.",
+    "unity": "2021.3",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/robbie-111/goat-webview.git"
+    },
+    "keywords": [
+        "webview"
+    ],
+    "dependencies": {
+        "com.unity.nuget.newtonsoft-json": "3.2.1"
+    }
+}

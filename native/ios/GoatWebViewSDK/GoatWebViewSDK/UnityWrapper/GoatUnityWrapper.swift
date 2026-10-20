@@ -117,17 +117,15 @@ private func string(_ pointer: UnsafePointer<CChar>?) -> String? {
 
 // MARK: - 생성·해제
 
-/// - Parameters:
-///   - gameObjectName: 이벤트를 받을 C# GameObject 이름. 웹뷰마다 고유해야 하며, NULL이거나 이미 쓰는 이름이면 false다.
-///   - allowedOrigins: `\n`으로 구분한 허용 출처. NULL이면 출처를 제한하지 않는다.
+/// 메시지 브리지는 `goatwebview_set_allowed_message_origins`로 출처를 정하기 전까지 없다(Android와 같다).
+/// - Parameter gameObjectName: 이벤트를 받을 C# GameObject 이름. 웹뷰마다 고유해야 하며, NULL이거나 이미 쓰는 이름이면 false다.
 /// - Returns: 부모 뷰(키 윈도의 루트 뷰)를 찾지 못했거나 GameObject 이름이 잘못됐으면 false
 @_cdecl("goatwebview_create")
-public func goatwebview_create(_ gameObjectName: UnsafePointer<CChar>?, _ allowedOrigins: UnsafePointer<CChar>?) -> Bool {
+public func goatwebview_create(_ gameObjectName: UnsafePointer<CChar>?) -> Bool {
     MainActor.assumeIsolated {
         guard let gameObjectName = string(gameObjectName), GoatUnityWrapper.wrappers[gameObjectName] == nil,
               let parentView = GoatUnityWrapper.rootView() else { return false }
-        let origins = string(allowedOrigins).map { $0.split(separator: "\n").map(String.init) }
-        let plugin = WebViewPlugin(parentView: parentView, allowedOrigins: origins)
+        let plugin = WebViewPlugin(parentView: parentView, allowedOrigins: [])
         GoatUnityWrapper.wrappers[gameObjectName] = GoatUnityWrapper(gameObjectName: gameObjectName, plugin: plugin, parentView: parentView)
         return true
     }
@@ -139,6 +137,15 @@ public func goatwebview_dispose(_ gameObjectName: UnsafePointer<CChar>?) {
     MainActor.assumeIsolated {
         guard let gameObjectName = string(gameObjectName) else { return }
         GoatUnityWrapper.wrappers.removeValue(forKey: gameObjectName)?.plugin.dispose()
+    }
+}
+
+/// `\n`으로 구분한 허용 출처. 빈 문자열이면 브리지를 내린다. 다음 탐색부터 적용된다.
+@_cdecl("goatwebview_set_allowed_message_origins")
+public func goatwebview_set_allowed_message_origins(_ gameObjectName: UnsafePointer<CChar>?, _ allowedOrigins: UnsafePointer<CChar>?) {
+    MainActor.assumeIsolated {
+        let origins = (string(allowedOrigins) ?? "").split(separator: "\n").map(String.init)
+        GoatUnityWrapper.wrapper(gameObjectName)?.plugin.setAllowedOrigins(origins)
     }
 }
 

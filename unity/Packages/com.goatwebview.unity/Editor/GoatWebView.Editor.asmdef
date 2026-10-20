@@ -1,0 +1,9 @@
+{
+    "name": "GoatWebView.Editor",
+    "references": [
+        "GoatWebView"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ]
+}

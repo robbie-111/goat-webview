@@ -58,7 +58,7 @@ public final class WebViewPlugin: NSObject {
     private(set) var containerView: ContainerView?
     private(set) var fallbackView: FallbackView?
     private var navigationHandler: NavigationHandler?
-    private let allowedOrigins: Set<String>?
+    private var allowedOrigins: Set<String>?
     // 지금 메인 프레임 탐색을 실패로 봤는지(HTTP 오류, 로드 실패). 켜져 있으면 로드가 끝나도
     // 웹뷰를 드러내지 않고, 다음 탐색이 시작되면 끈다.
     private var currentNavigationFailed = false
@@ -82,15 +82,7 @@ public final class WebViewPlugin: NSObject {
         let controller = WKUserContentController()
         controller.add(WeakScriptMessageHandler(delegate: self), name: WebViewPlugin.messageHandlerName)
         controller.add(WeakScriptMessageHandler(delegate: self), name: WebViewPlugin.consoleHandlerName)
-        controller.addUserScript(WKUserScript(
-            source: WebViewPlugin.bridgeScript(allowedOrigins: self.allowedOrigins),
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: true))
-        // 콘솔 전달 스크립트는 항상 설치하고, 출력 여부는 네이티브가 정한다(설정을 바로 반영하기 위해).
-        controller.addUserScript(WKUserScript(
-            source: WebViewPlugin.consoleScript,
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: false))
+        installUserScripts(controller)
         configuration.userContentController = controller
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
@@ -145,6 +137,27 @@ public final class WebViewPlugin: NSObject {
                 cleanUp()
             }
         }
+    }
+
+    /// `Unity.call`을 허용할 출처를 바꾼다. 지금 페이지에는 적용되지 않고 다음 탐색부터 적용된다.
+    /// `nil`이면 출처를 제한하지 않고, 빈 배열이면 브리지를 설치하지 않는다.
+    public func setAllowedOrigins(_ origins: [String]?) {
+        guard let controller = webView?.configuration.userContentController else { return }
+        allowedOrigins = origins.map { Set($0.compactMap(WebViewPlugin.normalizedOrigin(_:))) }
+        controller.removeAllUserScripts()
+        installUserScripts(controller)
+    }
+
+    private func installUserScripts(_ controller: WKUserContentController) {
+        controller.addUserScript(WKUserScript(
+            source: WebViewPlugin.bridgeScript(allowedOrigins: allowedOrigins),
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true))
+        // 콘솔 전달 스크립트는 항상 설치하고, 출력 여부는 네이티브가 정한다(설정을 바로 반영하기 위해).
+        controller.addUserScript(WKUserScript(
+            source: WebViewPlugin.consoleScript,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false))
     }
 
     // MARK: - Loading

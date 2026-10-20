@@ -10,7 +10,6 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.unity3d.player.UnityPlayer
 import com.goatwebview.sdk.WebViewCache
-import com.goatwebview.sdk.WebViewConfig
 import com.goatwebview.sdk.WebViewController
 import com.goatwebview.sdk.WebViewEvent
 import kotlin.math.roundToInt
@@ -26,20 +25,17 @@ import kotlin.math.roundToInt
  * 탐색 상태는 UniWebView처럼 이벤트 없이 [canGoBack], [canGoForward], [getUrl]로 조회한다.
  * 오버스크롤은 [setScrollBounceEnabled](기본 켜짐), 캐시는 [clearCache]로 정한다.
  * 웹뷰를 만들기 전에는 static [clearSharedCache]로 앱 공용 캐시를 비운다.
- * UnitySendMessage는 이름으로 GameObject를 찾으므로 이름은 씬에서 고유해야 하고, 생성 후 바꾸지 않는다.
+ * UnitySendMessage는 이름으로 GameObject를 찾으므로 C#은 웹뷰마다 고유한 이름의 GameObject를 넘긴다.
+ * 메시지 브리지는 [setAllowedMessageOrigins]로 출처를 정하기 전까지 없다.
  * 공개 메서드는 어느 스레드에서 호출해도 되며 호출 순서대로 메인 스레드에서 실행된다.
  * 잘못된 호출은 앱을 종료하지 않고 INVALID_CALL 오류로 알리며, [destroy] 이후의 호출은 무시한다.
- * 잘못된 출처·스크립트 설정은 생성자에서 바로 예외로 알린다.
  */
 class UnityWebView internal constructor(
     private val activity: Activity,
     private val gameObjectName: String,
-    allowedMessageOrigins: Array<String>,
-    documentStartScripts: Array<String>,
 ) {
     /** C#용 생성자. 현재 Unity Activity에 붙인다. */
-    constructor(gameObjectName: String, allowedMessageOrigins: Array<String>, documentStartScripts: Array<String>) :
-        this(UnityPlayer.currentActivity, gameObjectName, allowedMessageOrigins, documentStartScripts)
+    constructor(gameObjectName: String) : this(UnityPlayer.currentActivity, gameObjectName)
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var controller: WebViewController? = null
@@ -50,10 +46,9 @@ class UnityWebView internal constructor(
     @Volatile private var currentCanGoForward = false
 
     init {
-        val config = WebViewConfig(allowedMessageOrigins.toSet(), documentStartScripts = documentStartScripts.toList())
         post {
             if (destroyed) return@post
-            val created = WebViewController(activity, config, ::dispatch)
+            val created = WebViewController(activity, eventListener = ::dispatch)
             controller = created
             activity.findViewById<ViewGroup>(android.R.id.content).addView(
                 created.view,
@@ -62,6 +57,9 @@ class UnityWebView internal constructor(
             created.setVisible(false)
         }
     }
+
+    /** 메시지를 받을 출처. 다음 탐색부터 적용된다. 빈 배열이면 브리지를 내리고, 잘못된 출처는 INVALID_CALL로 알린다. */
+    fun setAllowedMessageOrigins(origins: Array<String>) = withController { it.setAllowedMessageOrigins(origins.toSet()) }
 
     fun loadUrl(url: String) = withController { it.loadUrl(url) }
 
