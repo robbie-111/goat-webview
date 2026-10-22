@@ -4,7 +4,7 @@ Unity 설치 없이 Kotlin 웹뷰 코어와 샘플 앱을 빌드·실행하는 A
 
 ## 실행
 
-Android Studio에서 이 디렉터리를 열고 Gradle JDK를 **17**로 지정한 뒤 `sample-app`을 실행합니다. Android SDK Platform 36과 API 26 이상 기기/에뮬레이터가 필요합니다. Android Studio가 생성하는 `local.properties`는 Git에서 제외합니다.
+Android Studio에서 이 디렉터리를 열고 Gradle JDK를 **17**로 지정한 뒤 `sample-app`을 실행합니다. Android SDK Platform 36과 API 26 이상 기기/에뮬레이터가 필요합니다(샘플 기준. `webview-sdk`·`unity-wrapper`는 Unity 기본값에 맞춰 API 25부터 지원합니다). Android Studio가 생성하는 `local.properties`는 Git에서 제외합니다.
 
 터미널에서는 JDK 17과 Android SDK 경로를 환경 변수로 지정합니다.
 
@@ -15,7 +15,7 @@ export ANDROID_HOME="/path/to/Android/sdk"
 ./gradlew :sample-app:installDebug
 ```
 
-샘플은 `webview-sdk` 기능을 직접 시험하는 화면입니다. 설정 화면에서 URL, 상단 safe area 색(`setTopSafeAreaColor` 프리셋), 스크롤 바운스(`setScrollBounceEnabled`), 모서리 반지름(`setRoundCornerRadius` 프리셋)을 정하고 캐시를 비울 수 있습니다. **Load**는 웹뷰를 숨긴 채 만들어 URL을 미리 로드하고, **Show**는 그 웹뷰를 전체 화면으로 표시합니다. Load 전에 Show를 누르면 Load부터 합니다. 웹뷰가 표시된 상태에서 Android 뒤로가기를 누르면 웹 기록이 있을 때는 웹에서 뒤로 가고, 없으면 웹뷰를 destroy하고 설정 화면으로 돌아갑니다. 다음 Load는 새 웹뷰에서 시작합니다.
+샘플은 `webview-sdk` 기능을 직접 시험하는 화면입니다. 설정 화면에서 URL, 상단 safe area 색(`setStatusBarColor` 프리셋), 스크롤 바운스(`setScrollBounceEnabled`), 모서리 반지름(`setRoundCornerRadius` 프리셋)을 정하고 캐시를 비울 수 있습니다. **Load**는 웹뷰를 숨긴 채 만들어 URL을 미리 로드하고, **Show**는 그 웹뷰를 전체 화면으로 표시합니다. Load 전에 Show를 누르면 Load부터 합니다. 웹뷰가 표시된 상태에서 Android 뒤로가기를 누르면 웹 기록이 있을 때는 웹에서 뒤로 가고, 없으면 웹뷰를 destroy하고 설정 화면으로 돌아갑니다. 다음 Load는 새 웹뷰에서 시작합니다.
 
 ```text
 설정 화면(스크롤)                         Show ▶   전체 화면 WebView
@@ -31,7 +31,7 @@ export ANDROID_HOME="/path/to/Android/sdk"
 └──────────────────────────────┘
 ```
 
-- 프리셋과 스위치는 웹뷰가 있으면 즉시 적용하고, 웹뷰를 만들 때도 적용합니다. 상단 색 **Off**는 `setTopSafeAreaColor`를 호출하지 않으므로 SDK 기본값(상태바 영역을 투명하게 비우고 그 아래부터 웹뷰)이 됩니다. 이미 색을 적용한 웹뷰에는 다음 Load부터 반영됩니다.
+- 프리셋과 스위치는 웹뷰가 있으면 즉시 적용하고, 웹뷰를 만들 때도 적용합니다. 상단 색 **Off**는 `setStatusBarColor`를 호출하지 않으므로 SDK 기본값(상태바 영역을 투명하게 비우고 그 아래부터 웹뷰)이 됩니다. 이미 색을 적용한 웹뷰에는 다음 Load부터 반영됩니다.
 - **Corner radius**는 웹 콘텐츠 영역(safe area를 피해 웹뷰가 놓인 사각형) 네 모서리를 둥글게 자릅니다. Off(0), 12, 24, Mixed(위쪽 두 모서리만 24, 바텀시트 모양) 프리셋이며 값은 dp입니다. SDK는 px를 받으므로 샘플이 density를 곱해 넘깁니다(iOS 샘플은 같은 값을 pt로 넘깁니다). 상단 띠는 자르지 않으므로 Fullscreen에서도 상태바 아래 웹 모서리가 둥글게 보입니다. Fullscreen의 아래 모서리는 웹이 제스처 핸들 뒤까지 채우면 물리 화면 모서리와 겹칩니다.
 - **Display**는 웹뷰를 화면 전체(Fullscreen) 또는 설정 화면 위에 좌우 24dp·상하 96dp 마진을 둔 팝업(Popup)으로 엽니다. 설정 화면은 두 모드 모두 웹뷰 아래에 남으므로, 웹뷰가 비운 상단 safe area(Top safe area color Off)에는 Fullscreen에서도 Popup처럼 설정 화면이 보입니다. Popup은 바깥 설정 화면을 조작할 수 있어, 상단 색·바운스·캐시를 바꾸면 떠 있는 웹뷰에 바로 반영됩니다. 팝업은 safe area와 겹치지 않으므로 상단 띠 없이 웹뷰가 팝업을 그대로 채웁니다.
 - **Clear Cache**는 웹뷰가 있으면 `clearCache(true)`, 없으면 `WebViewCache.clear(context)`를 호출합니다.
@@ -61,7 +61,7 @@ native/android/
 │       └── androidTest/              # 메인 스레드 밖에서 호출하는 기기 테스트
 └── sample-app/
     └── src/main/kotlin/com/goatwebview/sample/
-        ├── MainActivity.kt           # edge-to-edge, 웹 콘솔 로그 출력
+        ├── MainActivity.kt           # edge-to-edge
         └── DemoScreen.kt             # 설정 화면, Load/Show, AndroidView 호스트
 ```
 
@@ -69,14 +69,14 @@ native/android/
 
 - `view`는 WebView와 상단 safe area 띠를 담는 `FrameLayout` 컨테이너입니다. `setVisible`·`destroy`는 이 컨테이너에 적용됩니다.
 - WebView는 safe area 중 컨테이너와 실제로 겹치는 만큼만 비웁니다. 상단은 상태바·디스플레이 컷아웃, 하단·좌우는 3버튼 내비게이션 바·측면 컷아웃이며, 제스처 핸들 뒤는 채웁니다. 풀스크린이면 이 영역을 피하고, 마진을 준 팝업처럼 safe area와 겹치지 않는 컨테이너는 어느 방향으로도 줄이지 않습니다. 상태바 뒤까지 덮는 옵션은 없습니다.
-- `setTopSafeAreaColor(r, g, b, a)`(각 0..1)는 비워 둔 영역의 색만 정합니다. 호출하지 않거나 `a`가 0이면 칠하지 않아 투명합니다. 하단 내비게이션 바와 좌우는 칠하지 않습니다. iOS `WebViewPlugin.setTopSafeAreaColor(r:g:b:a:)`와 같은 원시 타입 시그니처라 Unity C#의 `Color`를 그대로 넘길 수 있습니다. 상태바 아이콘 색은 호스트(Activity)가 정합니다. iOS SDK는 아직 이전 동작(호출하지 않거나 `a`가 0이면 상태바 뒤까지 채움)이며 같은 규칙으로 맞출 예정입니다.
+- `setStatusBarColor(r, g, b, a)`(각 0..1)는 비워 둔 영역의 색만 정합니다. 호출하지 않거나 `a`가 0이면 칠하지 않아 투명합니다. 하단 내비게이션 바와 좌우는 칠하지 않습니다. iOS `WebViewPlugin.setStatusBarColor(r:g:b:a:)`와 같은 원시 타입 시그니처라 Unity C#의 `Color`를 그대로 넘길 수 있습니다. 상태바 아이콘 색은 호스트(Activity)가 정합니다. iOS SDK는 아직 이전 동작(호출하지 않거나 `a`가 0이면 상태바 뒤까지 채움)이며 같은 규칙으로 맞출 예정입니다.
 - 풀스크린 WebView는 3버튼 내비게이션 바(가로 모드에서는 측면 바)와 측면 디스플레이 컷아웃만큼 비켜 섭니다. 제스처 내비게이션에서는 핸들 뒤까지 채웁니다(iOS 홈 인디케이터와 같음). `tappableElement` inset을 쓰므로 내비게이션 모드를 바꾸면 바로 반영됩니다. 비워진 바 뒤쪽은 칠하지 않으며, 3버튼 바에는 시스템 대비 스크림이 그려집니다.
 - 이벤트(`WebViewEvent`) 이름은 UniWebView 이벤트에서 `On`을 뺀 것입니다. `PageStarted`, `PageFinished(url, statusCode)`, `LoadingErrorReceived`(네트워크·렌더러), `MessageReceived`, `NavigationChanged`, `MessageBridgeUnavailable`, `Closed`(폴백 화면 닫기 버튼으로 해제됨)가 있습니다. 메인 문서의 HTTP 오류는 별도 이벤트 없이 `PageFinished.statusCode`로 전달합니다.
 - **폴백 화면**(iOS와 같음): 웹 콘텐츠 영역 안에서 WebView 아래에 깔리는 네이티브 화면입니다(가운데 로딩 표시 또는 경고 아이콘, 오른쪽 위 48dp 닫기 버튼). WebView는 처음에 숨겨져 있고 메인 문서 로드가 실패 없이 끝나면(`onPageFinished`) 드러나 폴백을 덮습니다. 메인 문서의 네트워크 오류나 HTTP 400 이상이면 로드가 끝나도 WebView를 숨기고 실패 화면을 보이며, 다음 탐색이 시작되면 풀립니다. 한 번 보인 뒤의 탐색 중에는 이전 페이지를 계속 보여 줍니다. 닫기 버튼은 SDK가 웹뷰를 `destroy`한 뒤 `Closed`를 보냅니다. iOS와 달리 뒤로·앞으로 캐시에서 복원한 HTTP 오류 문서는 다시 실패로 판단하지 않습니다.
 - 폴백 화면 색은 호스트 테마와 무관하게 `setFallbackTheme(FallbackTheme)`로 정합니다. `LIGHT`(기본)·`DARK`·`SYSTEM`이며 iOS 시스템 색(`systemBackground`·`label`·`secondaryLabel`)과 같은 값을 씁니다. `SYSTEM`은 시스템 야간 모드를 따르고 실행 중 전환도 반영합니다. Unity 래퍼는 `setFallbackTheme(int)`(0 LIGHT, 1 DARK, 2 SYSTEM, 범위 밖이면 `INVALID_CALL`)입니다.
 - `setScrollBounceEnabled(enabled)`는 오버스크롤 효과를 켜고 끕니다(기본 켜짐, Android 기본 동작). `clearCache(includeDiskFiles)`는 앱의 모든 WebView가 공유하는 리소스 캐시를 비웁니다. 웹뷰를 만들기 전에는 `WebViewCache.clear(context)`를 씁니다.
 - `setRoundCornerRadius(topLeft, topRight, bottomLeft, bottomRight)`(px)는 웹 콘텐츠 영역(WebView를 담아 safe area를 피해 배치한 내부 뷰) 네 모서리를 둥글게 자릅니다. 상단 safe area 띠와 바깥 컨테이너는 자르지 않으므로 풀스크린에서도 상태바 아래 웹 모서리가 보입니다. 음수는 0, 모두 0이면 자르지 않습니다. 네 값이 같으면 outline 둥근 사각형, 다르면 API 33 이상은 outline path, 그 미만은 `clipPath`(가장자리 안티앨리어싱 없음)로 자릅니다. iOS와 같은 원시 타입 시그니처입니다(iOS는 pt).
-- 웹 콘솔 로그는 이벤트로 보내지 않습니다. 토큰 등이 포함될 수 있어 기본으로는 출력하지 않습니다. `WebViewController.setForwardWebConsoleToNativeOutput(true)`(static)이면 모든 웹뷰의 로그를 logcat `GoatWebView` 태그에 레벨별(`Log.e`/`w`/`d`/`i`)로 출력합니다.
+- 웹 콘솔 로그(iframe·잡히지 않은 예외 포함)는 `ConsoleMessage(level, message, sourceId, lineNumber)` 이벤트로만 보냅니다. `level`은 `DEBUG`·`LOG`·`WARNING`·`ERROR`(TIP은 `LOG`)입니다. 토큰 등이 포함될 수 있어 SDK는 logcat에 직접 출력하지 않으며(WebView 기본 chromium 출력도 막음) 출력 여부는 호스트가 정합니다.
 
 `unity-wrapper`는 `webview-sdk`를 참조하며, `webview-sdk`는 Unity를 알지 못합니다. Unity `classes.jar`는 `compileOnly`로만 참조하므로 AAR에 포함되지 않습니다. 기기 테스트는 UnitySendMessage 대신 전송 내용을 받아 Unity 없이 실행합니다.
 
@@ -92,12 +92,16 @@ native/android/
 | `OnMessageReceived` | `message`, `origin` |
 | `OnJavaScriptResult` | `requestId`, `result` |
 | `OnMessageBridgeUnavailable` | `reason` |
+| `OnConsoleMessage` | `level`, `message`, `source`, `line`. `setConsoleMessageEnabled(true)`로 켠 웹뷰만 보냅니다(기본 꺼짐) |
+| `OnClosed` | 없음. 폴백 화면 닫기 버튼으로 코어가 웹뷰를 해제했습니다 |
 
 - 탐색 상태는 UniWebView처럼 이벤트 없이 `canGoBack()`, `canGoForward()`, `getUrl()`로 조회합니다. WebView는 UI 스레드에서만 접근할 수 있으므로 래퍼가 코어 `NavigationChanged`의 마지막 값을 보관하고, Unity 스레드에서 바로 반환합니다. `pushState` 같은 문서 내 이동도 반영됩니다.
 - UnitySendMessage는 이름으로 GameObject를 찾으므로 이름은 씬에서 고유해야 하고 생성 후 바꾸지 않습니다.
 - `setScrollBounceEnabled(bool)`, `clearCache(bool includeDiskFiles)`, `setRoundCornerRadius(tl, tr, bl, br)`(px)는 코어의 같은 메서드를 호출합니다. 웹뷰가 없을 때는 `UnityWebView.clearSharedCache()`(static, 어느 스레드에서나 호출 가능)로 앱 공용 캐시를 비웁니다. 이벤트를 받을 GameObject가 없으므로 실패는 logcat에만 남습니다.
-- 폴백 화면 닫기 버튼으로 코어가 웹뷰를 해제하면(`Closed`) 이후 호출은 무시하며, iOS 래퍼처럼 Unity에는 보내지 않습니다.
-- 웹 콘솔 로그는 이벤트로 보내지 않습니다. `UnityWebView.setForwardWebConsoleToNativeOutput(true)`(static, 기본 false)는 코어의 같은 설정에 위임합니다.
+- 폴백 화면 닫기 버튼으로 코어가 웹뷰를 해제하면(`Closed`) `OnClosed`를 보내고 이후 호출은 무시합니다(iOS 래퍼와 같음).
+- 웹 콘솔 로그는 웹뷰마다 `setConsoleMessageEnabled(bool)`(기본 false, 어느 스레드에서나 바로 반영)로 켠 경우에만 `OnConsoleMessage`로 보냅니다.
+- 페이지가 iOS와 같은 `window.Unity.call(message)`로 보낼 수 있도록 허용 출처의 메인 프레임에 코어 `WebViewKit.postMessage`를 감싸는 문서 시작 스크립트를 설치합니다.
+- `setFrame`의 y가 0이면(상단 safe area에 닿으면) 컨테이너를 창 맨 위까지 늘려 코어가 상단 safe area만큼 비우고 `setStatusBarColor` 띠를 칠하게 합니다. 웹 콘텐츠 위치는 같습니다.
 - 코어에서 발생한 잘못된 호출 예외는 앱을 종료하지 않고 `LoadingErrorReceived`(`kind` = `INVALID_CALL`)로 전달합니다. 잘못된 출처 설정은 생성자에서 예외로 알립니다. `destroy` 이후의 호출은 무시합니다.
 
 샘플의 `WebViewHost`는 `AndroidView`로 `WebViewController`를 소유하며, 재구성에서는 새로 생성하거나 로드하지 않습니다.
@@ -105,12 +109,12 @@ native/android/
 - 백그라운드 복귀: Activity 생명주기에 맞춰 같은 WebView의 `pause`/`resume`을 호출합니다.
 - 화면 회전: 마지막 URL·표시 여부·설정(`rememberSaveable`)으로 WebView를 새로 생성해 복원합니다.
 - 화면 해제: `destroy`를 호출합니다.
-- 웹 페이지 디버깅을 위해 `MainActivity`에서 웹 콘솔 로그를 logcat `GoatWebView` 태그로 항상 출력합니다.
+- 웹 페이지 디버깅을 위해 `DemoScreen`이 `ConsoleMessage` 이벤트를 logcat `WebConsole` 태그로 출력합니다.
 - `usesCleartextTraffic="false"`이므로 `http://` 주소는 열리지 않습니다.
 
 ## 빌드·검증
 
-버전: Gradle 9.1.0, AGP 9.0.1, 내장 Kotlin/Compose compiler 2.2.10, Compose BOM 2026.02.01, minSdk 26, compile/targetSdk 36. AGP의 내장 Kotlin을 사용하므로 `org.jetbrains.kotlin.android` 플러그인을 추가하지 않습니다.
+버전: Gradle 9.1.0, AGP 9.0.1, 내장 Kotlin/Compose compiler 2.2.10, Compose BOM 2026.02.01, minSdk 25(`webview-sdk`·`unity-wrapper`)·26(`sample-app`), compile/targetSdk 36. AGP의 내장 Kotlin을 사용하므로 `org.jetbrains.kotlin.android` 플러그인을 추가하지 않습니다.
 
 ```sh
 ./gradlew :webview-sdk:assembleRelease :unity-wrapper:assembleRelease :sample-app:assembleDebug

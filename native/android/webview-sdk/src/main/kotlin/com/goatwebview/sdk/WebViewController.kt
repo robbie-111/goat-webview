@@ -9,7 +9,6 @@ import android.graphics.Outline
 import android.graphics.Path
 import android.os.Build
 import android.os.Looper
-import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -34,13 +33,14 @@ import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import androidx.webkit.ScriptHandler
+import kotlin.math.roundToInt
 
 /**
  * Unity에 의존하지 않는 웹뷰 한 개의 소유자.
  *
  * 생성과 모든 공개 API 호출은 메인 스레드에서 수행한다.
  * 호스트가 [view]를 ViewGroup에 추가하고 Activity 생명주기에 맞춰 pause/resume/destroy를 호출한다.
- * [view]는 WebView와 상단 safe area 띠([setTopSafeAreaColor])를 담는 컨테이너다.
+ * [view]는 WebView와 상단 safe area 띠([setStatusBarColor])를 담는 컨테이너다.
  * WebView는 항상 상단 safe area(상태바·컷아웃) 중 컨테이너와 겹치는 부분을 비우고 그 아래부터 채운다.
  * safe area와 겹치지 않는 팝업형 컨테이너는 어느 방향으로도 줄이지 않는다.
  * WebView는 3버튼 내비게이션 바와 측면 디스플레이 컷아웃 중 컨테이너와 겹치는 만큼만 피하고, 제스처 내비게이션 핸들 뒤까지는 채운다.
@@ -59,7 +59,7 @@ class WebViewController(
     private val containerView: FrameLayout
     // WebView를 담아 safe area를 피한 자리에 놓이는 웹 콘텐츠 영역. 모서리 라운딩은 이 뷰를 자른다.
     private val contentView: FrameLayout
-    private val topSafeAreaView: View
+    private val statusBarView: View
     // 로드 전·실패 시 웹뷰 아래에 보이는 화면(닫기 버튼). 웹뷰는 메인 문서 로드가 실패 없이 끝나야 드러난다.
     private val fallbackView: FallbackView
     // 지금 메인 프레임 탐색을 실패로 봤는지(네트워크·HTTP 오류). 켜져 있으면 로드가 끝나도 웹뷰를 드러내지 않고,
@@ -67,7 +67,7 @@ class WebViewController(
     private var currentNavigationFailed = false
     // 상태바(디스플레이 컷아웃 포함) 위쪽 inset과, 비운 영역을 칠할지 여부. 비우는 것은 항상 한다.
     private var topSafeAreaInset = 0
-    private var topSafeAreaColored = false
+    private var statusBarColored = false
     // 컨테이너의 window 기준 위치. layout 때 갱신하고 다음 measure에서 쓴다.
     private val containerLocation = IntArray(2)
     // 3버튼 내비게이션 바와 측면 컷아웃 크기. 제스처 핸들은 터치 대상이 아니라 0이다.
@@ -109,7 +109,7 @@ class WebViewController(
             destroy()
             callback?.invoke(WebViewEvent.Closed)
         }
-        topSafeAreaView = View(context).apply { visibility = View.GONE }
+        statusBarView = View(context).apply { visibility = View.GONE }
         contentView = object : FrameLayout(context) {
             // 모서리 반지름이 서로 다른데 outline path로 자를 수 없는 API 33 미만에서만 쓴다(가장자리 안티앨리어싱 없음).
             override fun dispatchDraw(canvas: Canvas) {
@@ -146,7 +146,7 @@ class WebViewController(
             }
         }.apply {
             addView(contentView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-            addView(topSafeAreaView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 0, Gravity.TOP))
+            addView(statusBarView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 0, Gravity.TOP))
         }
         // insets는 소비하지 않고 그대로 하위 뷰에 넘긴다.
         ViewCompat.setOnApplyWindowInsetsListener(containerView) { _, insets ->
@@ -154,8 +154,12 @@ class WebViewController(
                 WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout(),
             ).top
             // 3버튼 내비게이션 바와 측면 컷아웃만 피한다. 제스처 핸들 뒤는 웹이 채운다.
+            // immersive로 바를 숨긴 호스트(Unity 등)에서는 일부 기기가 숨긴 바의 tappableElement를 그대로 돌려주므로,
+            // 내비게이션 바가 보일 때만 그 값을 쓴다.
+            val navigationBarVisible = insets.isVisible(WindowInsetsCompat.Type.navigationBars())
             sideSafeAreaInsets = insets.getInsets(
-                WindowInsetsCompat.Type.tappableElement() or WindowInsetsCompat.Type.displayCutout(),
+                (if (navigationBarVisible) WindowInsetsCompat.Type.tappableElement() else 0) or
+                    WindowInsetsCompat.Type.displayCutout(),
             )
             updateSafeArea()
             insets
@@ -174,17 +178,16 @@ class WebViewController(
         }
 
         webView.webChromeClient = object : WebChromeClient() {
-            // 웹 콘솔에는 토큰 등이 포함될 수 있으므로 기본으로는 출력하지 않는다.
+            // SDK는 웹 콘솔을 직접 출력하지 않고 이벤트로만 넘긴다. 토큰 등이 포함될 수 있으므로 출력 여부는 호스트가 정한다.
+            // true를 반환해 WebView 기본 logcat 출력(chromium 태그)도 막는다.
             override fun onConsoleMessage(message: ConsoleMessage): Boolean {
-                if (forwardWebConsoleToNativeOutput) {
-                    val text = "${message.message()} (${message.sourceId()}:${message.lineNumber()})"
-                    when (message.messageLevel()) {
-                        ConsoleMessage.MessageLevel.ERROR -> Log.e(LOG_TAG, text)
-                        ConsoleMessage.MessageLevel.WARNING -> Log.w(LOG_TAG, text)
-                        ConsoleMessage.MessageLevel.DEBUG -> Log.d(LOG_TAG, text)
-                        else -> Log.i(LOG_TAG, text)
-                    }
+                val level = when (message.messageLevel()) {
+                    ConsoleMessage.MessageLevel.ERROR -> WebViewEvent.ConsoleMessage.Level.ERROR
+                    ConsoleMessage.MessageLevel.WARNING -> WebViewEvent.ConsoleMessage.Level.WARNING
+                    ConsoleMessage.MessageLevel.DEBUG -> WebViewEvent.ConsoleMessage.Level.DEBUG
+                    else -> WebViewEvent.ConsoleMessage.Level.LOG
                 }
+                emit(WebViewEvent.ConsoleMessage(level, message.message().orEmpty(), message.sourceId().orEmpty(), message.lineNumber()))
                 return true
             }
         }
@@ -278,7 +281,9 @@ class WebViewController(
         val supportsMessages = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
         val supportsScripts = documentStartScripts.isEmpty() ||
             WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
-        isMessageBridgeAvailable = if (origins.isNotEmpty() && supportsMessages && supportsScripts) {
+        // lint(RequiresFeature)는 변수에 담은 검사를 추적하지 못하므로 조건에서 직접 확인한다.
+        isMessageBridgeAvailable = if (origins.isNotEmpty() && supportsScripts &&
+            WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             WebViewCompat.addWebMessageListener(webView, BRIDGE_NAME, origins) {
                     _, message, origin, isMainFrame, _ ->
                 if (isMainFrame && message.type == WebMessageCompat.TYPE_STRING) {
@@ -401,10 +406,11 @@ class WebViewController(
      * 아래쪽 시스템 바와 좌우는 칠하지 않는다.
      * Unity C#의 Color를 변환 없이 넘길 수 있도록 iOS와 같은 원시 타입을 받는다. 상태바 아이콘 색은 호스트(Activity)가 정한다.
      */
-    fun setTopSafeAreaColor(r: Float, g: Float, b: Float, a: Float) {
+    fun setStatusBarColor(r: Float, g: Float, b: Float, a: Float) {
         checkActive()
-        topSafeAreaColored = a > 0f
-        if (topSafeAreaColored) topSafeAreaView.setBackgroundColor(Color.argb(a, r, g, b))
+        statusBarColored = a > 0f
+        // Float 버전 Color.argb는 API 26부터라 0..255 정수로 바꿔 쓴다.
+        if (statusBarColored) statusBarView.setBackgroundColor(Color.argb(channel(a), channel(r), channel(g), channel(b)))
         updateSafeArea()
         ViewCompat.requestApplyInsets(containerView)
     }
@@ -438,7 +444,7 @@ class WebViewController(
 
     /** inset이나 색이 바뀌면 띠 표시 여부를 갱신하고 다시 배치한다. 위치 계산은 [safeAreaFor]가 한다. */
     private fun updateSafeArea() {
-        topSafeAreaView.visibility = if (topSafeAreaColored) View.VISIBLE else View.GONE
+        statusBarView.visibility = if (statusBarColored) View.VISIBLE else View.GONE
         containerView.requestLayout()
     }
 
@@ -465,7 +471,7 @@ class WebViewController(
     private fun measureInsideSafeArea(width: Int, height: Int) {
         val area = safeAreaFor(width, height)
         contentView.measure(exactly(area.width), exactly(area.height))
-        topSafeAreaView.measure(exactly(width), exactly(area.top))
+        statusBarView.measure(exactly(width), exactly(area.top))
     }
 
     /** 현재 위치로 다시 계산해, 위치가 바뀌어 크기가 달라졌을 때만 다시 measure하고 한 번만 layout한다. */
@@ -476,10 +482,10 @@ class WebViewController(
             contentView.measure(exactly(area.width), exactly(area.height))
         }
         contentView.layout(area.left, area.top, area.left + area.width, area.top + area.height)
-        if (topSafeAreaView.measuredWidth != width || topSafeAreaView.measuredHeight != area.top) {
-            topSafeAreaView.measure(exactly(width), exactly(area.top))
+        if (statusBarView.measuredWidth != width || statusBarView.measuredHeight != area.top) {
+            statusBarView.measure(exactly(width), exactly(area.top))
         }
-        topSafeAreaView.layout(0, 0, width, area.top)
+        statusBarView.layout(0, 0, width, area.top)
     }
 
     private fun reveal() {
@@ -493,6 +499,8 @@ class WebViewController(
         webView.visibility = View.INVISIBLE
         fallbackView.state = FallbackView.State.FAILED
     }
+
+    private fun channel(value: Float) = (value.coerceIn(0f, 1f) * 255f).roundToInt()
 
     private fun hasUniformCorners() = cornerRadii.all { it == cornerRadii[0] }
 
@@ -525,18 +533,5 @@ class WebViewController(
 
     companion object {
         const val BRIDGE_NAME = "WebViewKit"
-        private const val LOG_TAG = "GoatWebView"
-
-        @Volatile
-        private var forwardWebConsoleToNativeOutput = false
-
-        /**
-         * 모든 웹뷰의 웹 콘솔 로그를 logcat(GoatWebView 태그)에 레벨별로 출력할지 정한다. 기본값은 false다.
-         * UniWebView의 SetForwardWebConsoleToNativeOutput에 대응한다.
-         */
-        @JvmStatic
-        fun setForwardWebConsoleToNativeOutput(enabled: Boolean) {
-            forwardWebConsoleToNativeOutput = enabled
-        }
     }
 }

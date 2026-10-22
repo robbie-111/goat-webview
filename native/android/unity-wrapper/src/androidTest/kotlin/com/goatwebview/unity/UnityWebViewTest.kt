@@ -53,7 +53,7 @@ class UnityWebViewTest {
     @Test fun eventsGoToTheGivenGameObjectInCallOrder() {
         webView = UnityWebView(activity, "SupportWebView")
         webView.setAllowedMessageOrigins(arrayOf(ORIGIN))
-        webView.loadHtml("<script>WebViewKit.postMessage('ready')</script>", "$ORIGIN/")
+        webView.loadHtml("<script>Unity.call('ready')</script>", "$ORIGIN/")
         await { has("OnMessageReceived") { it.getString("message") == "ready" && it.getString("origin") == ORIGIN } }
         await { has("OnPageFinished") { it.getString("url") == "$ORIGIN/" && it.getInt("statusCode") == 200 } }
         assertTrue(has("OnPageStarted"))
@@ -96,6 +96,22 @@ class UnityWebViewTest {
         assertTrue(sent.none { it.method == "OnLoadingErrorReceived" })
     }
 
+    @Test fun consoleMessagesAreSentOnlyWhenEnabled() {
+        webView = UnityWebView(activity, "WebView")
+        webView.loadHtml("<script>console.warn('off')</script>", "$ORIGIN/off")
+        await { has("OnPageFinished") { it.getString("url") == "$ORIGIN/off" } }
+        webView.setConsoleMessageEnabled(true)
+        webView.loadHtml("<script>console.warn('on')</script>", "$ORIGIN/on")
+        await {
+            has("OnConsoleMessage") {
+                it.getString("level") == "WARNING" && it.getString("message") == "on" &&
+                    it.getString("source") == "$ORIGIN/on" && it.getInt("line") == 1
+            }
+        }
+        // 꺼져 있을 때 로드한 페이지의 메시지는 켠 뒤에도 보내지 않는다.
+        assertTrue(sent.none { it.method == "OnConsoleMessage" && it.payload.getString("message") == "off" })
+    }
+
     @Test fun invalidCallsAreReportedInsteadOfCrashing() {
         webView = UnityWebView(activity, "WebView")
         webView.loadUrl("file:///sdcard/index.html")
@@ -136,6 +152,24 @@ class UnityWebViewTest {
             assertEquals(0, core.top)
             assertEquals(params.width, core.width)
             assertEquals(params.height, core.height)
+        }
+
+        // (0, 0, 1, 1)은 컨테이너가 창 맨 위부터 safe area를 덮고, 코어가 그만큼 비워 웹 콘텐츠는 safe area 아래에 놓인다.
+        webView.setFrame(0f, 0f, 1f, 1f)
+        instrumentation.waitForIdleSync()
+        await {
+            var laidOut = false
+            scenario.onActivity { laidOut = container().top == 0 && container().height == content().height }
+            laidOut
+        }
+        scenario.onActivity {
+            val content = content()
+            val safeTop = ViewCompat.getRootWindowInsets(content)!!
+                .getInsets(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout()).top
+            val params = container().layoutParams as FrameLayout.LayoutParams
+            assertEquals(0, params.topMargin)
+            assertEquals(content.height, params.height)
+            assertEquals(safeTop, (container() as ViewGroup).getChildAt(0).top)
         }
     }
 

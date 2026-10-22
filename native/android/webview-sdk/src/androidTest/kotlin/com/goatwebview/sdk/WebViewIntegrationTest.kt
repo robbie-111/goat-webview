@@ -6,7 +6,6 @@ import android.graphics.Outline
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
-import android.os.ParcelFileDescriptor
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebResourceRequest
@@ -124,20 +123,26 @@ class WebViewIntegrationTest {
         assertTrue(events.filterIsInstance<WebViewEvent.LoadingErrorReceived>().isEmpty())
     }
 
-    @Test fun webConsoleIsForwardedToLogcatOnlyWhenEnabled() {
+    @Test fun consoleMessagesAreDeliveredAsEventsByLevel() {
         create(WebViewConfig(requestInterceptor = ::intercept))
-        val marker = "console-" + System.nanoTime()
-        shell("logcat -c")
-        main { controller.loadHtml("<script>console.warn('$marker-off')</script>", "$ORIGIN/off") }
-        awaitLoaded("/off")
-        WebViewController.setForwardWebConsoleToNativeOutput(true)
-        try {
-            main { controller.loadHtml("<script>console.warn('$marker-on')</script>", "$ORIGIN/on") }
-            awaitLoaded("/on")
-            await { shell("logcat -d -v brief -s GoatWebView").lines().any { it.startsWith("W/GoatWebView") && "$marker-on" in it } }
-            assertFalse("$marker-off" in shell("logcat -d -v brief -s GoatWebView"))
-        } finally {
-            WebViewController.setForwardWebConsoleToNativeOutput(false)
+        main {
+            controller.loadHtml(
+                "<script>console.log('m-log'); console.warn('m-warn'); console.error('m-error'); console.debug('m-debug')</script>",
+                "$ORIGIN/console",
+            )
+        }
+        awaitLoaded("/console")
+        val expected = mapOf(
+            "m-log" to WebViewEvent.ConsoleMessage.Level.LOG,
+            "m-warn" to WebViewEvent.ConsoleMessage.Level.WARNING,
+            "m-error" to WebViewEvent.ConsoleMessage.Level.ERROR,
+            "m-debug" to WebViewEvent.ConsoleMessage.Level.DEBUG,
+        )
+        await { events.filterIsInstance<WebViewEvent.ConsoleMessage>().map { it.message }.containsAll(expected.keys) }
+        for (message in events.filterIsInstance<WebViewEvent.ConsoleMessage>()) {
+            assertEquals(expected[message.message], message.level)
+            assertTrue(message.sourceId.endsWith("/console"))
+            assertEquals(1, message.lineNumber)
         }
     }
 
@@ -187,7 +192,7 @@ class WebViewIntegrationTest {
         }
     }
 
-    @Test fun topSafeAreaColorPaintsOnlyTheStatusBarInset() {
+    @Test fun statusBarColorPaintsOnlyTheStatusBarInset() {
         create()
         instrumentation.waitForIdleSync()
         main {
@@ -204,7 +209,7 @@ class WebViewIntegrationTest {
             assertEquals(controller.view.height, content().bottom)
 
             // 상태바 높이만큼만 칠한다.
-            controller.setTopSafeAreaColor(0f, 0f, 0f, 1f)
+            controller.setStatusBarColor(0f, 0f, 0f, 1f)
             ViewCompat.dispatchApplyWindowInsets(controller.view, insets)
             relayout()
             assertEquals(View.VISIBLE, band().visibility)
@@ -213,7 +218,7 @@ class WebViewIntegrationTest {
             assertEquals(100, content().top)
 
             // a가 0이면 칠하지 않고 투명하게 비워 둔다.
-            controller.setTopSafeAreaColor(0f, 0f, 0f, 0f)
+            controller.setStatusBarColor(0f, 0f, 0f, 0f)
             ViewCompat.dispatchApplyWindowInsets(controller.view, insets)
             relayout()
             assertEquals(View.GONE, band().visibility)
@@ -225,7 +230,7 @@ class WebViewIntegrationTest {
         create()
         instrumentation.waitForIdleSync()
         main {
-            controller.setTopSafeAreaColor(1f, 0f, 0f, 1f)
+            controller.setStatusBarColor(1f, 0f, 0f, 1f)
             ViewCompat.dispatchApplyWindowInsets(controller.view, WindowInsetsCompat.Builder()
                 .setInsets(WindowInsetsCompat.Type.statusBars(), Insets.of(0, 100, 0, 0))
                 .build())
@@ -253,18 +258,30 @@ class WebViewIntegrationTest {
             relayout()
             assertEquals(container.height, content().bottom)
 
-            // 3버튼 내비게이션: 바 높이만큼 피한다.
+            // 3버튼 내비게이션(보임): 바 높이만큼 피한다.
             ViewCompat.dispatchApplyWindowInsets(container, WindowInsetsCompat.Builder()
                 .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 0, 126))
                 .setInsets(WindowInsetsCompat.Type.tappableElement(), Insets.of(0, 0, 0, 126))
+                .setVisible(WindowInsetsCompat.Type.navigationBars(), true)
                 .build())
             relayout()
             assertEquals(container.height - 126, content().bottom)
 
+            // 3버튼 내비게이션(immersive로 숨김): 일부 기기는 tappableElement를 그대로 돌려주지만 비우지 않는다.
+            ViewCompat.dispatchApplyWindowInsets(container, WindowInsetsCompat.Builder()
+                .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 0, 126))
+                .setInsets(WindowInsetsCompat.Type.tappableElement(), Insets.of(0, 0, 0, 126))
+                .setVisible(WindowInsetsCompat.Type.navigationBars(), false)
+                .build())
+            relayout()
+            assertEquals(container.height, content().bottom)
+
             // 가로 모드: 옆쪽 3버튼 바와 반대쪽 카메라 컷아웃을 피한다.
             ViewCompat.dispatchApplyWindowInsets(container, WindowInsetsCompat.Builder()
+                .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 126, 0))
                 .setInsets(WindowInsetsCompat.Type.tappableElement(), Insets.of(0, 0, 126, 0))
                 .setInsets(WindowInsetsCompat.Type.displayCutout(), Insets.of(90, 0, 0, 0))
+                .setVisible(WindowInsetsCompat.Type.navigationBars(), true)
                 .build())
             relayout()
             assertEquals(90, content().left)
@@ -301,7 +318,7 @@ class WebViewIntegrationTest {
             val container = controller.view as ViewGroup
             val outline = Outline()
             // 풀스크린처럼 상태바 inset이 있어도 웹 콘텐츠 영역만 자르고 상단 띠·컨테이너는 자르지 않는다.
-            controller.setTopSafeAreaColor(0f, 0f, 0f, 1f)
+            controller.setStatusBarColor(0f, 0f, 0f, 1f)
             ViewCompat.dispatchApplyWindowInsets(container, WindowInsetsCompat.Builder()
                 .setInsets(WindowInsetsCompat.Type.statusBars(), Insets.of(0, 100, 0, 0))
                 .build())
@@ -406,9 +423,6 @@ class WebViewIntegrationTest {
         events.filterIsInstance<WebViewEvent.PageFinished>().any { it.url.endsWith(path) }
     }
     private fun finished(path: String) = events.filterIsInstance<WebViewEvent.PageFinished>().last { it.url.endsWith(path) }
-    private fun shell(command: String): String =
-        ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command))
-            .bufferedReader().use { it.readText() }
     private fun awaitJs(condition: String) = await { js(condition) == "true" }
     private fun await(condition: () -> Boolean) {
         val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)

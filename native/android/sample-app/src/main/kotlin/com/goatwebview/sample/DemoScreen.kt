@@ -2,6 +2,7 @@ package com.goatwebview.sample
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Log
 import android.view.MotionEvent
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -51,7 +52,7 @@ import com.goatwebview.sdk.WebViewEvent
 
 private const val START_URL = "https://example.com"
 
-/** setTopSafeAreaColor에 넘기는 r, g, b, a(각 0..1). Off는 호출하지 않는다(SDK 기본: 상단을 투명하게 비움). */
+/** setStatusBarColor에 넘기는 r, g, b, a(각 0..1). Off는 호출하지 않는다(SDK 기본: 상단을 투명하게 비움). */
 private enum class SafeArea(val color: FloatArray?) {
     Off(null),
     Black(floatArrayOf(0f, 0f, 0f, 1f)),
@@ -60,7 +61,7 @@ private enum class SafeArea(val color: FloatArray?) {
 }
 
 private fun WebViewController.applySafeArea(preset: SafeArea) {
-    preset.color?.let { (r, g, b, a) -> setTopSafeAreaColor(r, g, b, a) }
+    preset.color?.let { (r, g, b, a) -> setStatusBarColor(r, g, b, a) }
 }
 
 /** setRoundCornerRadius 프리셋(dp). topLeft, topRight, bottomLeft, bottomRight 순서. Mixed는 위만 둥글게(바텀시트 모양). */
@@ -231,6 +232,8 @@ fun DemoScreen() {
                             navigation = event
                             event.url?.let { loadedUrl = it }
                         }
+                        // 샘플은 웹 페이지 디버깅을 위해 웹 콘솔 로그를 logcat(WebConsole 태그)으로 출력한다.
+                        is WebViewEvent.ConsoleMessage -> logConsole(event)
                         else -> Unit
                     }
                 },
@@ -311,5 +314,15 @@ private class WebViewHostView(
         released = true
         lifecycle.removeObserver(this)
         controller.destroy()
+    }
+}
+
+private fun logConsole(event: WebViewEvent.ConsoleMessage) {
+    val text = "${event.message} (${event.sourceId}:${event.lineNumber})"
+    when (event.level) {
+        WebViewEvent.ConsoleMessage.Level.ERROR -> Log.e("WebConsole", text)
+        WebViewEvent.ConsoleMessage.Level.WARNING -> Log.w("WebConsole", text)
+        WebViewEvent.ConsoleMessage.Level.DEBUG -> Log.d("WebConsole", text)
+        WebViewEvent.ConsoleMessage.Level.LOG -> Log.i("WebConsole", text)
     }
 }

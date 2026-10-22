@@ -10,7 +10,8 @@ import java.net.URI
  * [allowedMessageOrigins]에는 경로가 없는 정확한 HTTP(S) 출처만 지정한다.
  * 빈 집합이면 JavaScript 메시지 수신 객체를 노출하지 않는다.
  * [requestInterceptor]는 WebView의 작업 스레드에서 호출되므로 UI를 조작하지 않는다.
- * [documentStartScripts]는 허용 출처의 문서 시작 시 실행한다. iframe 제외는 스크립트에서도 검사해야 한다.
+ * [documentStartScripts]는 허용 출처의 문서 시작 시 실행한다. 출처가 비어 있으면 설치하지 않고, 나중에
+ * [WebViewController.setAllowedMessageOrigins]로 출처를 정할 때 설치한다. iframe 제외는 스크립트에서도 검사해야 한다.
  * 스크립트를 요청했지만 System WebView가 지원하지 않으면 메시지 브리지 전체를 비활성화한다.
  */
 class WebViewConfig(
@@ -22,9 +23,6 @@ class WebViewConfig(
     val documentStartScripts: List<String> = documentStartScripts.toList()
 
     init {
-        require(this.documentStartScripts.isEmpty() || this.allowedMessageOrigins.isNotEmpty()) {
-            "문서 시작 스크립트에는 허용 출처가 필요합니다."
-        }
         require(this.documentStartScripts.all { it.isNotBlank() }) { "빈 스크립트는 등록할 수 없습니다." }
         requireValidOrigins(this.allowedMessageOrigins)
     }

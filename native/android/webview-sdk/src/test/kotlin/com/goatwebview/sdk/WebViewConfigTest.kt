@@ -13,8 +13,8 @@ class WebViewConfigTest {
         WebViewConfig(setOf("http://localhost:8080", "https://example.com"))
     }
 
-    @Test fun scriptsRequireAnOriginAndInputsAreCopied() {
-        assertThrows(IllegalArgumentException::class.java) { WebViewConfig(documentStartScripts = listOf("1")) }
+    @Test fun blankScriptsAreRejectedAndInputsAreCopied() {
+        assertEquals(listOf("1"), WebViewConfig(documentStartScripts = listOf("1")).documentStartScripts)
         assertThrows(IllegalArgumentException::class.java) { WebViewConfig(setOf("https://example.com"), documentStartScripts = listOf(" ")) }
         val origins = mutableSetOf("https://example.com")
         val scripts = mutableListOf("window.ready = true")

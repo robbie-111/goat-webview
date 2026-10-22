@@ -11,6 +11,7 @@ import androidx.core.view.WindowInsetsCompat
 import com.unity3d.player.UnityPlayer
 import com.goatwebview.sdk.FallbackTheme
 import com.goatwebview.sdk.WebViewCache
+import com.goatwebview.sdk.WebViewConfig
 import com.goatwebview.sdk.WebViewController
 import com.goatwebview.sdk.WebViewEvent
 import kotlin.math.roundToInt
@@ -22,13 +23,15 @@ import kotlin.math.roundToInt
  * 이벤트는 C# 컴포넌트가 붙은 GameObject([gameObjectName])의 메서드를 UnitySendMessage로 호출해 보낸다.
  * 메서드 이름은 UniWebView 이벤트 이름을 따르며 인자는 이벤트별 필드를 담은 JSON 문자열이다:
  * OnPageStarted, OnPageFinished, OnLoadingErrorReceived, OnMessageReceived, OnJavaScriptResult,
- * OnMessageBridgeUnavailable.
+ * OnMessageBridgeUnavailable, OnConsoleMessage, OnClosed(폴백 화면의 닫기 버튼으로 코어가 웹뷰를 해제함).
+ * 웹 콘솔 로그(OnConsoleMessage)는 토큰 등이 포함될 수 있어 기본으로 보내지 않으며 [setConsoleMessageEnabled]로 켠다.
  * 탐색 상태는 UniWebView처럼 이벤트 없이 [canGoBack], [canGoForward], [getUrl]로 조회한다.
  * 오버스크롤은 [setScrollBounceEnabled](기본 켜짐), 캐시는 [clearCache]로 정한다.
  * 웹뷰를 만들기 전에는 static [clearSharedCache]로 앱 공용 캐시를 비운다.
  * UnitySendMessage는 이름으로 GameObject를 찾으므로 C#은 웹뷰마다 고유한 이름의 GameObject를 넘긴다.
  * 메시지 브리지는 [setAllowedMessageOrigins]로 출처를 정하기 전까지 없다.
  * 공개 메서드는 어느 스레드에서 호출해도 되며 호출 순서대로 메인 스레드에서 실행된다.
+ * 폴백 화면의 닫기 버튼으로 코어가 웹뷰를 해제하면 OnClosed를 보내고 이후 호출을 무시한다(iOS 래퍼와 같음).
  * 잘못된 호출은 앱을 종료하지 않고 INVALID_CALL 오류로 알리며, [destroy] 이후의 호출은 무시한다.
  */
 class UnityWebView internal constructor(
@@ -45,11 +48,12 @@ class UnityWebView internal constructor(
     @Volatile private var currentUrl: String? = null
     @Volatile private var currentCanGoBack = false
     @Volatile private var currentCanGoForward = false
+    @Volatile private var consoleMessageEnabled = false
 
     init {
         post {
             if (destroyed) return@post
-            val created = WebViewController(activity, eventListener = ::dispatch)
+            val created = WebViewController(activity, WebViewConfig(documentStartScripts = listOf(UNITY_COMPATIBILITY_SCRIPT)), ::dispatch)
             controller = created
             activity.findViewById<ViewGroup>(android.R.id.content).addView(
                 created.view,
@@ -93,6 +97,11 @@ class UnityWebView internal constructor(
 
     fun setScrollBounceEnabled(enabled: Boolean) = withController { it.setScrollBounceEnabled(enabled) }
 
+    /** 웹 콘솔 메시지를 OnConsoleMessage로 보낼지 정한다. 기본값은 false이며, 어느 스레드에서 호출해도 바로 반영된다. */
+    fun setConsoleMessageEnabled(enabled: Boolean) {
+        consoleMessageEnabled = enabled
+    }
+
     /** 앱의 모든 웹뷰가 공유하는 캐시를 비운다. [includeDiskFiles]가 false면 메모리 캐시만 비운다. */
     fun clearCache(includeDiskFiles: Boolean) = withController { it.clearCache(includeDiskFiles) }
 
@@ -101,7 +110,7 @@ class UnityWebView internal constructor(
         it.setFallbackTheme(FallbackTheme.entries.getOrNull(theme) ?: throw IllegalArgumentException("알 수 없는 폴백 테마입니다: $theme"))
     }
 
-    fun setTopSafeAreaColor(r: Float, g: Float, b: Float, a: Float) = withController { it.setTopSafeAreaColor(r, g, b, a) }
+    fun setStatusBarColor(r: Float, g: Float, b: Float, a: Float) = withController { it.setStatusBarColor(r, g, b, a) }
 
     /** 네 모서리 반지름(px). C#은 Unity 화면 픽셀을 기기 픽셀로 바꿔 넘긴다. */
     fun setRoundCornerRadius(topLeft: Float, topRight: Float, bottomLeft: Float, bottomRight: Float) =
@@ -109,7 +118,8 @@ class UnityWebView internal constructor(
 
     /**
      * 상단 safe area(상태바·컷아웃)를 뺀 콘텐츠 영역에 대한 비율(0..1)로 위치와 크기를 정한다.
-     * 원점은 safe area 바로 아래의 좌상단이다. 프레임이 safe area 아래에 놓이므로 코어가 위쪽을 다시 비우지 않는다.
+     * 원점은 safe area 바로 아래의 좌상단이다. 프레임이 safe area에 닿으면(y == 0) 컨테이너를 창 맨 위까지 늘려
+     * 코어가 겹치는 safe area만큼 비우고 상단 띠를 칠하게 한다(네이티브 샘플 Fullscreen과 같은 배치). 웹 콘텐츠 위치는 같다.
      * C#은 Unity 해상도 스케일링과 무관하도록 화면 픽셀을 Screen.width/height로 나눠서 넘긴다.
      */
     fun setFrame(x: Float, y: Float, width: Float, height: Float) = withController {
@@ -120,11 +130,12 @@ class UnityWebView internal constructor(
         val parentTop = IntArray(2).also(parent::getLocationInWindow)[1]
         val safeTop = (inset - parentTop).coerceAtLeast(0)
         val available = parent.height - safeTop
+        val touchesTop = y <= 0f
         view.layoutParams = (view.layoutParams as FrameLayout.LayoutParams).apply {
             leftMargin = (x * parent.width).roundToInt()
-            topMargin = safeTop + (y * available).roundToInt()
+            topMargin = if (touchesTop) 0 else safeTop + (y * available).roundToInt()
             this.width = (width * parent.width).roundToInt()
-            this.height = (height * available).roundToInt()
+            this.height = (height * available).roundToInt() + (if (touchesTop) safeTop else 0)
         }
     }
 
@@ -169,9 +180,17 @@ class UnityWebView internal constructor(
             }
             is WebViewEvent.MessageReceived ->
                 sendMessage("OnMessageReceived", "message" to event.message, "origin" to event.origin)
-            // 폴백 화면 닫기 버튼으로 코어가 이미 해제했다. iOS 래퍼처럼 Unity에는 보내지 않고 이후 호출을 무시한다.
-            WebViewEvent.Closed -> controller = null
             is WebViewEvent.MessageBridgeUnavailable -> sendMessage("OnMessageBridgeUnavailable", "reason" to event.reason)
+            // 폴백 화면 닫기 버튼으로 코어가 이미 해제했다. OnClosed로 알리고 이후 호출을 무시한다(iOS 래퍼와 같음).
+            WebViewEvent.Closed -> {
+                controller = null
+                sendMessage("OnClosed")
+            }
+            is WebViewEvent.ConsoleMessage -> if (consoleMessageEnabled) {
+                sendMessage("OnConsoleMessage",
+                    "level" to event.level.name, "message" to event.message,
+                    "source" to event.sourceId, "line" to event.lineNumber)
+            }
         }
     }
 
@@ -184,12 +203,19 @@ class UnityWebView internal constructor(
 
     companion object {
         const val INVALID_CALL = "INVALID_CALL"
-        private const val LOG_TAG = "GoatWebView"
 
-        /** 모든 웹뷰의 웹 콘솔 로그를 logcat에 출력할지 정한다. C#이 래퍼 클래스만 알면 되도록 코어 설정에 위임한다. */
-        @JvmStatic
-        fun setForwardWebConsoleToNativeOutput(enabled: Boolean) =
-            WebViewController.setForwardWebConsoleToNativeOutput(enabled)
+        // 페이지의 Unity.call(message)를 코어의 WebViewKit 브리지로 잇는다(iOS SDK가 window.Unity를 주입하는 것과 같음).
+        // 허용 출처의 메인 프레임에만 설치되며, 전송 검사는 코어가 한다.
+        private val UNITY_COMPATIBILITY_SCRIPT = """
+            (function () {
+                if (window !== window.top || !window.WebViewKit) return;
+                var transport = window.WebViewKit;
+                var unity = window.Unity || {};
+                unity.call = function (message) { transport.postMessage(String(message)); };
+                window.Unity = unity;
+            })();
+        """.trimIndent()
+        private const val LOG_TAG = "GoatWebView"
 
         /**
          * 웹뷰 인스턴스 없이 앱의 모든 웹뷰가 공유하는 메모리·디스크 캐시를 비운다. 어느 스레드에서 호출해도 된다.
