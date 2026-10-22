@@ -45,6 +45,16 @@ internal sealed class GoatWebViewListener : MonoBehaviour
         Owner?.HandleJavaScriptResult((int?)payload["requestId"] ?? 0, result == "null" ? null : result);
     }
 
+    void OnClosed(string json) => Owner?.HandleClosed();
+
+    void OnConsoleMessage(string json)
+    {
+        var payload = JObject.Parse(json);
+        Owner?.HandleConsoleMessage(new GoatWebViewConsoleMessage(
+            GoatWebViewConsoleMessage.ParseLevel((string)payload["level"]), (string)payload["message"],
+            (string)payload["source"], (int?)payload["line"] ?? 0));
+    }
+
     void OnMessageBridgeUnavailable(string json)
     {
         var payload = JObject.Parse(json);

@@ -19,6 +19,8 @@ public protocol WebViewPluginDelegate: AnyObject {
     func webViewPlugin(_ plugin: WebViewPlugin, didReceiveHTTPError statusCode: Int, url: String)
     /// 폴백 화면의 닫기 버튼으로 SDK가 웹뷰를 해제한 뒤 불린다. 이후 다른 콜백은 없다.
     func webViewPluginDidClose(_ plugin: WebViewPlugin)
+    /// 웹 콘솔 메시지(iframe·잡히지 않은 예외 포함). SDK는 출력하지 않으며, 토큰 등이 포함될 수 있으므로 출력 여부는 호스트가 정한다.
+    func webViewPlugin(_ plugin: WebViewPlugin, didReceiveConsoleMessage message: WebViewConsoleMessage)
 }
 
 public extension WebViewPluginDelegate {
@@ -28,6 +30,42 @@ public extension WebViewPluginDelegate {
     func webViewPlugin(_ plugin: WebViewPlugin, didFailWithError error: Error) {}
     func webViewPlugin(_ plugin: WebViewPlugin, didReceiveHTTPError statusCode: Int, url: String) {}
     func webViewPluginDidClose(_ plugin: WebViewPlugin) {}
+    func webViewPlugin(_ plugin: WebViewPlugin, didReceiveConsoleMessage message: WebViewConsoleMessage) {}
+}
+
+/// 웹 콘솔 메시지 한 개. 필드는 Android `WebViewEvent.ConsoleMessage`와 같다.
+public struct WebViewConsoleMessage: Equatable, Sendable {
+    /// `console.info`는 `log`로 보낸다(Android와 같음).
+    public enum Level: String, Sendable {
+        case debug = "DEBUG"
+        case log = "LOG"
+        case warning = "WARNING"
+        case error = "ERROR"
+    }
+
+    public let level: Level
+    public let message: String
+    /// 스크립트 URL. 알 수 없으면 페이지 URL이다.
+    public let source: String
+    /// `source`의 줄 번호. 알 수 없으면 0이다.
+    public let line: Int
+
+    public init(level: Level, message: String, source: String, line: Int) {
+        self.level = level
+        self.message = message
+        self.source = source
+        self.line = line
+    }
+
+    // 콘솔 스크립트가 보낸 {level, message, source, line}. 형식이 다르면 nil이다.
+    init?(body: Any) {
+        guard let body = body as? [String: Any],
+              let level = (body["level"] as? String).flatMap(Level.init(rawValue:)),
+              let message = body["message"] as? String else { return nil }
+        self.init(level: level, message: message,
+                  source: body["source"] as? String ?? "",
+                  line: (body["line"] as? NSNumber)?.intValue ?? 0)
+    }
 }
 
 public enum WebViewPluginError: Error, Equatable {

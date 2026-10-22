@@ -39,7 +39,7 @@ internal static class NativeInterface
     public static void SetVisibility(string name, bool visible) => goatwebview_set_visibility(name, visible);
     public static void SetFrame(string name, float x, float y, float width, float height) => goatwebview_set_frame(name, x, y, width, height);
     public static void SetFallbackTheme(string name, int theme) => goatwebview_set_fallback_theme(name, theme);
-    public static void SetTopSafeAreaColor(string name, float r, float g, float b, float a) => goatwebview_set_top_safe_area_color(name, r, g, b, a);
+    public static void SetStatusBarColor(string name, float r, float g, float b, float a) => goatwebview_set_status_bar_color(name, r, g, b, a);
 
     public static void SetRoundCornerRadius(string name, float topLeft, float topRight, float bottomLeft, float bottomRight) =>
         goatwebview_set_round_corner_radius(name, topLeft, topRight, bottomLeft, bottomRight);
@@ -47,7 +47,7 @@ internal static class NativeInterface
     public static void SetBouncesEnabled(string name, bool enabled) => goatwebview_set_scroll_bounce_enabled(name, enabled);
     public static void SetPaused(string name, bool paused) => goatwebview_set_suspended(name, paused);
     public static void ClearCache() => goatwebview_clear_cache();
-    public static void SetForwardWebConsoleToNativeOutput(bool enabled) => goatwebview_set_forward_web_console_to_native_output(enabled);
+    public static void SetConsoleMessageEnabled(string name, bool enabled) => goatwebview_set_console_message_enabled(name, enabled);
 
     // Swift Bool은 1바이트이므로 bool 인자와 반환값은 I1로 마샬링한다.
     [DllImport("__Internal")] [return: MarshalAs(UnmanagedType.I1)]
@@ -67,11 +67,11 @@ internal static class NativeInterface
     [DllImport("__Internal")] static extern void goatwebview_set_visibility([MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.I1)] bool visible);
     [DllImport("__Internal")] static extern void goatwebview_set_frame([MarshalAs(UnmanagedType.LPUTF8Str)] string name, float x, float y, float width, float height);
     [DllImport("__Internal")] static extern void goatwebview_set_fallback_theme([MarshalAs(UnmanagedType.LPUTF8Str)] string name, int theme);
-    [DllImport("__Internal")] static extern void goatwebview_set_top_safe_area_color([MarshalAs(UnmanagedType.LPUTF8Str)] string name, float r, float g, float b, float a);
+    [DllImport("__Internal")] static extern void goatwebview_set_status_bar_color([MarshalAs(UnmanagedType.LPUTF8Str)] string name, float r, float g, float b, float a);
     [DllImport("__Internal")] static extern void goatwebview_set_round_corner_radius([MarshalAs(UnmanagedType.LPUTF8Str)] string name, float topLeft, float topRight, float bottomLeft, float bottomRight);
     [DllImport("__Internal")] static extern void goatwebview_set_scroll_bounce_enabled([MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.I1)] bool enabled);
     [DllImport("__Internal")] static extern void goatwebview_set_suspended([MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.I1)] bool suspended);
     [DllImport("__Internal")] static extern void goatwebview_clear_cache();
-    [DllImport("__Internal")] static extern void goatwebview_set_forward_web_console_to_native_output([MarshalAs(UnmanagedType.I1)] bool enabled);
+    [DllImport("__Internal")] static extern void goatwebview_set_console_message_enabled([MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.I1)] bool enabled);
 }
 #endif

@@ -1,8 +1,8 @@
-#if !UNITY_EDITOR_OSX && !((UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR)
+#if !(UNITY_EDITOR_OSX || UNITY_EDITOR_WIN) && !((UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR)
 using UnityEngine;
 
 /// <summary>
-/// 지원하지 않는 플랫폼(Windows Editor, Standalone 등). 처음 한 번만 경고를 남기고 아무것도 하지 않는다.
+/// 지원하지 않는 플랫폼(Linux Editor, Standalone 등). 처음 한 번만 경고를 남기고 아무것도 하지 않는다.
 /// </summary>
 internal static class NativeInterface
 {
@@ -13,7 +13,7 @@ internal static class NativeInterface
         if (!warned)
         {
             warned = true;
-            Debug.LogWarning("[GoatWebView] 이 플랫폼에서는 웹뷰를 표시하지 않습니다. Android·iOS 기기나 macOS Editor에서 실행하세요.");
+            Debug.LogWarning("[GoatWebView] 이 플랫폼에서는 웹뷰를 표시하지 않습니다. Android·iOS 기기나 macOS·Windows Editor에서 실행하세요.");
         }
         return true;
     }
@@ -33,11 +33,11 @@ internal static class NativeInterface
     public static void SetVisibility(string name, bool visible) { }
     public static void SetFrame(string name, float x, float y, float width, float height) { }
     public static void SetFallbackTheme(string name, int theme) { }
-    public static void SetTopSafeAreaColor(string name, float r, float g, float b, float a) { }
+    public static void SetStatusBarColor(string name, float r, float g, float b, float a) { }
     public static void SetRoundCornerRadius(string name, float topLeft, float topRight, float bottomLeft, float bottomRight) { }
     public static void SetBouncesEnabled(string name, bool enabled) { }
     public static void SetPaused(string name, bool paused) { }
     public static void ClearCache() { }
-    public static void SetForwardWebConsoleToNativeOutput(bool enabled) { }
+    public static void SetConsoleMessageEnabled(string name, bool enabled) { }
 }
 #endif

@@ -20,6 +20,7 @@ public class GoatWebView : MonoBehaviour
     public delegate void PageFinishedDelegate(GoatWebView webView, int statusCode, string url);
     public delegate void LoadingErrorReceivedDelegate(GoatWebView webView, GoatWebViewLoadingError error);
     public delegate void MessageReceivedDelegate(GoatWebView webView, GoatWebViewMessage message);
+    public delegate void ConsoleMessageDelegate(GoatWebView webView, GoatWebViewConsoleMessage message);
 
     /// <summary>메인 프레임 탐색 시작. 서버 리다이렉트 때도 새 URL로 다시 불린다.</summary>
     public event PageStartedDelegate OnPageStarted;
@@ -31,6 +32,13 @@ public class GoatWebView : MonoBehaviour
     public event MessageReceivedDelegate OnMessageReceived;
     /// <summary>허용 출처를 줬지만 기기의 System WebView가 메시지 브리지를 지원하지 않는다(Android 전용). 인자는 이유.</summary>
     public event Action<GoatWebView, string> OnMessageBridgeUnavailable;
+    /// <summary>
+    /// 사용자가 폴백 화면(로드 전·실패 시 화면)의 닫기 버튼을 눌러 네이티브가 웹뷰를 해제했다.
+    /// 이 컴포넌트는 남아 있지만 이후 호출은 무시되므로 보통 Destroy한다.
+    /// </summary>
+    public event Action<GoatWebView> OnClosed;
+    /// <summary>웹 콘솔 로그(console.log 등). 토큰 등이 섞일 수 있어 기본으로 보내지 않으며 <see cref="SetConsoleMessageEnabled"/>로 켠다.</summary>
+    public event ConsoleMessageDelegate OnConsoleMessage;
 
     readonly Dictionary<int, Action<string>> javaScriptCallbacks = new Dictionary<int, Action<string>>();
     static readonly Vector3[] corners = new Vector3[4];
@@ -54,9 +62,6 @@ public class GoatWebView : MonoBehaviour
     Vector2Int appliedScreenSize;
     Rect appliedSafeArea;
     Rect appliedFrame;
-
-    /// <summary>모든 웹뷰의 웹 콘솔 로그를 네이티브 로그(Android logcat·iOS os_log, 태그 GoatWebView)로 출력할지 정한다. 기본 false.</summary>
-    public static void SetForwardWebConsoleToNativeOutput(bool enabled) => NativeInterface.SetForwardWebConsoleToNativeOutput(enabled);
 
     /// <summary>앱의 모든 웹뷰가 공유하는 캐시를 비운다. 쿠키와 웹 저장소는 유지한다.</summary>
     public static void ClearCache() => NativeInterface.ClearCache();
@@ -210,7 +215,7 @@ public class GoatWebView : MonoBehaviour
 
     /// <summary>
     /// 폴백 화면(로드 전·실패 시 웹뷰 자리에 보이는 화면과 닫기 버튼)의 테마. 기본 Light.
-    /// System은 기기의 다크 모드를 따른다. macOS Editor에서는 무시한다.
+    /// System은 기기의 다크 모드를 따른다. Editor에서는 무시한다.
     /// </summary>
     public void SetFallbackTheme(GoatWebViewFallbackTheme theme)
     {
@@ -218,10 +223,18 @@ public class GoatWebView : MonoBehaviour
         if (nativeName != null) NativeInterface.SetFallbackTheme(nativeName, (int)theme);
     }
 
-    /// <summary>상단 safe area(상태바·노치)를 칠할 색. 알파가 0이면 칠하지 않는다.</summary>
-    public void SetTopSafeAreaColor(Color color)
+    /// <summary>
+    /// 웹 콘솔 로그를 <see cref="OnConsoleMessage"/>로 받을지 정한다. 기본 false. 켠 뒤에 찍힌 로그부터 받는다.
+    /// </summary>
+    public void SetConsoleMessageEnabled(bool enabled)
     {
-        if (nativeName != null) NativeInterface.SetTopSafeAreaColor(nativeName, color.r, color.g, color.b, color.a);
+        if (nativeName != null) NativeInterface.SetConsoleMessageEnabled(nativeName, enabled);
+    }
+
+    /// <summary>상단 safe area(상태바·노치)를 칠할 색. 알파가 0이면 칠하지 않는다.</summary>
+    public void SetStatusBarColor(Color color)
+    {
+        if (nativeName != null) NativeInterface.SetStatusBarColor(nativeName, color.r, color.g, color.b, color.a);
     }
 
     /// <summary>스크롤 끝에서 튕기는 효과. 기본 true.</summary>
@@ -278,6 +291,19 @@ public class GoatWebView : MonoBehaviour
     internal void HandleMessageReceived(GoatWebViewMessage message) => OnMessageReceived?.Invoke(this, message);
 
     internal void HandleMessageBridgeUnavailable(string reason) => OnMessageBridgeUnavailable?.Invoke(this, reason);
+
+    internal void HandleConsoleMessage(GoatWebViewConsoleMessage message) => OnConsoleMessage?.Invoke(this, message);
+
+    // 네이티브는 이미 해제됐으므로 Destroy를 부르지 않고 연결만 끊는다.
+    internal void HandleClosed()
+    {
+        if (nativeName == null) return;
+        nativeName = null;
+        if (listener != null) Destroy(listener.gameObject);
+        listener = null;
+        javaScriptCallbacks.Clear();
+        OnClosed?.Invoke(this);
+    }
 
     internal void HandleJavaScriptResult(int requestId, string result)
     {

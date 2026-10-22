@@ -1,4 +1,4 @@
-#if UNITY_EDITOR_OSX
+#if UNITY_EDITOR_OSX || UNITY_EDITOR_WIN
 /*
  * Copyright (C) 2011 Keijiro Takahashi
  * Copyright (C) 2012 GREE, Inc.
@@ -31,10 +31,11 @@ using UnityEngine.Rendering;
 using UnityEngine.UI;
 
 /// <summary>
-/// macOS Editor에서 <c>GoatWebView.bundle</c>을 쓰는 확인용 웹뷰. 번들은 화면 밖 창의 WKWebView를 비트맵으로 주므로
-/// 매 프레임 텍스처로 받아 OnGUI로 그리고, 마우스·키 입력을 번들에 넘긴다.
-/// Editor에서는 UnitySendMessage를 쓸 수 없어 번들이 쌓은 "메서드:JSON" 메시지를 꺼내
-/// 같은 GameObject에 SendMessage로 보낸다(<see cref="GoatWebViewListener"/>가 받는다).
+/// macOS Editor에서 <c>GoatWebView.bundle</c>(WKWebView), Windows Editor에서 <c>GoatWebViewPlugin.dll</c>(WebView2)을 쓰는 확인용 웹뷰.
+/// 플러그인은 화면 밖 창의 웹뷰를 비트맵으로 주므로 매 프레임 텍스처로 받아 OnGUI로 그리고, 마우스·키 입력을 플러그인에 넘긴다.
+/// Editor에서는 UnitySendMessage를 쓸 수 없어 플러그인이 쌓은 "메서드:JSON" 메시지를 꺼내
+/// 같은 GameObject에 SendMessage로 보낸다(<see cref="GoatWebViewListener"/>가 받는다). 두 플러그인의 C 함수와 메시지 형식은 같다.
+/// 비트맵은 둘 다 위→아래 행 순서이고 Unity 텍스처는 좌하단이 원점이라 뒤집어 그리며, Windows DLL은 버퍼에 복사하고 macOS 번들은 포인터를 돌려주는 점만 다르다.
 /// </summary>
 [AddComponentMenu("")]
 internal sealed class GoatWebViewEditorView : MonoBehaviour
@@ -47,7 +48,13 @@ internal sealed class GoatWebViewEditorView : MonoBehaviour
     Rect rect;
     Vector2Int appliedSize;
     Texture2D texture;
+#if UNITY_EDITOR_WIN
+    // Windows DLL은 비트맵을 이 버퍼에 복사한다.
+    byte[] pixelBuffer;
+#endif
     bool hasFocus;
+    // 번들은 웹 콘솔을 항상 보내고, 켜기 전에는 여기서 버린다(기기와 같이 기본은 꺼짐).
+    bool consoleMessageEnabled;
     string inputString = "";
     GameObject blockerCanvas;
     RectTransform blocker;
@@ -87,6 +94,8 @@ internal sealed class GoatWebViewEditorView : MonoBehaviour
     internal void GoBack() => _CWebViewPlugin_GoBack(instance);
     internal void GoForward() => _CWebViewPlugin_GoForward(instance);
     internal void Reload() => _CWebViewPlugin_Reload(instance);
+
+    internal void SetConsoleMessageEnabled(bool enabled) => consoleMessageEnabled = enabled;
 
     internal void SetVisible(bool value)
     {
@@ -150,6 +159,7 @@ internal sealed class GoatWebViewEditorView : MonoBehaviour
             if (i == -1) continue;
             var method = s.Substring(0, i);
             var json = s.Substring(i + 1);
+            if (method == "OnConsoleMessage" && !consoleMessageEnabled) continue;
             if (method == "OnPageStarted" || method == "OnPageFinished")
                 Url = (string)JObject.Parse(json)["url"];
             SendMessage(method, json, SendMessageOptions.DontRequireReceiver);
@@ -172,9 +182,16 @@ internal sealed class GoatWebViewEditorView : MonoBehaviour
                 wrapMode = TextureWrapMode.Clamp,
             };
         }
+#if UNITY_EDITOR_WIN
+        var length = bitmapWidth * bitmapHeight * 4;
+        if (pixelBuffer == null || pixelBuffer.Length != length) pixelBuffer = new byte[length];
+        _CWebViewPlugin_Render(instance, pixelBuffer);
+        texture.LoadRawTextureData(pixelBuffer);
+#else
         var pixels = _CWebViewPlugin_Render(instance, IntPtr.Zero);
         if (pixels == IntPtr.Zero) return;
         texture.LoadRawTextureData(pixels, bitmapWidth * bitmapHeight * 4);
+#endif
         texture.Apply();
     }
 
@@ -218,7 +235,7 @@ internal sealed class GoatWebViewEditorView : MonoBehaviour
                 }
                 if (texture != null)
                 {
-                    // 비트맵은 아래에서 위로 쌓여 있으므로 뒤집어 그린다.
+                    // 비트맵은 위→아래 행 순서인데 LoadRawTextureData는 첫 행을 텍스처 아래로 두므로 뒤집어 그린다.
                     var matrix = GUI.matrix;
                     GUI.matrix = Matrix4x4.TRS(new Vector3(0, Screen.height, 0), Quaternion.identity, new Vector3(1, -1, 1));
                     Graphics.DrawTexture(rect, texture);
@@ -232,10 +249,15 @@ internal sealed class GoatWebViewEditorView : MonoBehaviour
 
     Vector2 ToWebView(Vector2 guiPosition) => ToBottomLeft(guiPosition) - rect.position;
 
+    // macOS는 GoatWebView.bundle이다. Windows DLL은 asmdef가 만드는 관리 어셈블리 GoatWebView.dll과 이름이 겹치지 않도록 GoatWebViewPlugin.dll이다.
+#if UNITY_EDITOR_WIN
+    const string Bundle = "GoatWebViewPlugin";
+#else
     const string Bundle = "GoatWebView";
+#endif
 
-    // Objective-C BOOL은 1바이트이므로 bool 인자와 반환값은 I1로 마샬링한다.
-    // _CWebViewPlugin_GetMessage가 malloc한 문자열은 string 반환 마샬링이 해제한다.
+    // Objective-C BOOL과 MSVC bool은 1바이트이므로 bool 인자와 반환값은 I1로 마샬링한다.
+    // _CWebViewPlugin_GetMessage가 준 문자열(macOS malloc, Windows CoTaskMemAlloc)은 string 반환 마샬링이 해제한다.
     [DllImport(Bundle)] static extern void _CWebViewPlugin_InitStatic([MarshalAs(UnmanagedType.I1)] bool inEditor, [MarshalAs(UnmanagedType.I1)] bool useMetal);
     [DllImport(Bundle)] static extern IntPtr _CWebViewPlugin_Init([MarshalAs(UnmanagedType.LPUTF8Str)] string gameObject, [MarshalAs(UnmanagedType.I1)] bool transparent,
         [MarshalAs(UnmanagedType.I1)] bool zoom, int width, int height, [MarshalAs(UnmanagedType.LPUTF8Str)] string ua, [MarshalAs(UnmanagedType.I1)] bool separated);
@@ -256,7 +278,11 @@ internal sealed class GoatWebViewEditorView : MonoBehaviour
     [DllImport(Bundle)] static extern int _CWebViewPlugin_BitmapWidth(IntPtr instance);
     [DllImport(Bundle)] static extern int _CWebViewPlugin_BitmapHeight(IntPtr instance);
     [DllImport(Bundle)] [return: MarshalAs(UnmanagedType.I1)] static extern bool _CWebViewPlugin_BitmapARGB(IntPtr instance);
+#if UNITY_EDITOR_WIN
+    [DllImport(Bundle)] static extern void _CWebViewPlugin_Render(IntPtr instance, byte[] textureBuffer);
+#else
     [DllImport(Bundle)] static extern IntPtr _CWebViewPlugin_Render(IntPtr instance, IntPtr textureBuffer);
+#endif
     [DllImport(Bundle)] [return: MarshalAs(UnmanagedType.LPUTF8Str)] static extern string _CWebViewPlugin_GetMessage(IntPtr instance);
 }
 #endif

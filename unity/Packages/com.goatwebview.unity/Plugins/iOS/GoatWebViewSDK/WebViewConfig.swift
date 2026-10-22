@@ -46,28 +46,71 @@ extension WebViewPlugin {
         """
     }
 
-    // console.log·info·warn·error·debug를 감싸 원래 동작은 유지하고 {level, message}를 네이티브로 보낸다.
-    // WKWebView에는 콘솔 콜백이 없어서 Android onConsoleMessage 대신 쓴다.
-    static let consoleScript = """
-    (function() {
-        var handler = window.webkit && window.webkit.messageHandlers.\(consoleHandlerName);
-        if (!handler || window.__goatConsoleInstalled) return;
-        window.__goatConsoleInstalled = true;
-        function text(value) {
-            if (typeof value === 'string') return value;
-            try { return JSON.stringify(value); } catch (e) { return String(value); }
-        }
-        ['log', 'info', 'warn', 'error', 'debug'].forEach(function(level) {
-            var original = console[level];
-            console[level] = function() {
+    // 웹 콘솔(console.debug/log/info/warn/error)과 잡히지 않은 예외를 콘솔 핸들러로 보낸다. Android onConsoleMessage에 대응한다.
+    // 원래 함수를 먼저 불러 Safari 웹 검사기 출력은 그대로 둔다. 위치는 호출자 스택 프레임에서 best-effort로 뽑는다.
+    static func consoleScript() -> String {
+        """
+        (function() {
+            var handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.\(consoleHandlerName);
+            if (!handler || window.__goatConsoleInstalled)
+                return;
+            window.__goatConsoleInstalled = true;
+            var sending = false;
+            function text(value) {
+                if (typeof value === 'string')
+                    return value;
+                if (value instanceof Error)
+                    return String(value);
+                if (value !== null && typeof value === 'object') {
+                    try {
+                        var json = JSON.stringify(value);
+                        if (json !== undefined)
+                            return json;
+                    } catch (e) {}
+                }
+                return String(value);
+            }
+            // 스택 프레임은 "함수@URL:줄:열" 형식이다. 이 스크립트(user-script) 프레임을 건너뛴 첫 프레임을 호출 위치로 본다.
+            // JavaScriptCore는 스크립트 마지막 문장의 호출처럼 호출자 프레임을 스택에 남기지 않을 때가 있어, 그때는 페이지 URL과 0을 쓴다.
+            function callerLocation(stack) {
+                var lines = String(stack || '').split('\\n');
+                for (var i = 0; i < lines.length; i++) {
+                    var match = lines[i].match(/([a-z][a-z0-9+.-]*:[^@\\s]*):(\\d+):\\d+$/i);
+                    if (match && match[1].indexOf('user-script:') !== 0)
+                        return { source: match[1], line: Number(match[2]) };
+                }
+                return { source: window.location.href, line: 0 };
+            }
+            function send(level, message, source, line) {
+                if (sending)
+                    return;
+                sending = true;
                 try {
-                    handler.postMessage({ level: level, message: Array.prototype.map.call(arguments, text).join(' ') });
-                } catch (e) {}
-                if (original) original.apply(console, arguments);
-            };
-        });
-    })();
-    """
+                    handler.postMessage({ level: level, message: message, source: source, line: line });
+                } catch (e) {
+                } finally {
+                    sending = false;
+                }
+            }
+            var levels = { debug: 'DEBUG', log: 'LOG', info: 'LOG', warn: 'WARNING', error: 'ERROR' };
+            Object.keys(levels).forEach(function(name) {
+                var original = console[name];
+                console[name] = function() {
+                    if (typeof original === 'function')
+                        original.apply(console, arguments);
+                    var where = callerLocation(new Error().stack);
+                    send(levels[name], Array.prototype.map.call(arguments, text).join(' '), where.source, where.line);
+                };
+            });
+            window.addEventListener('error', function(event) {
+                send('ERROR', event.message || text(event.error), event.filename || window.location.href, event.lineno || 0);
+            });
+            window.addEventListener('unhandledrejection', function(event) {
+                send('ERROR', 'Unhandled promise rejection: ' + text(event.reason), window.location.href, 0);
+            });
+        })();
+        """
+    }
 
     static func webURL(_ string: String) -> URL? {
         guard let url = URL(string: percentEncodingInvalidCharacters(string)),

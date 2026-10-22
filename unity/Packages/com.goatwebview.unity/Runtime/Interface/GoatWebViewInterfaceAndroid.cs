@@ -51,22 +51,18 @@ internal static class NativeInterface
     public static void SetVisibility(string name, bool visible) => Call(name, "setVisible", visible);
     public static void SetFrame(string name, float x, float y, float width, float height) => Call(name, "setFrame", x, y, width, height);
     public static void SetFallbackTheme(string name, int theme) => Call(name, "setFallbackTheme", theme);
-    public static void SetTopSafeAreaColor(string name, float r, float g, float b, float a) => Call(name, "setTopSafeAreaColor", r, g, b, a);
+    public static void SetStatusBarColor(string name, float r, float g, float b, float a) => Call(name, "setStatusBarColor", r, g, b, a);
 
     public static void SetRoundCornerRadius(string name, float topLeft, float topRight, float bottomLeft, float bottomRight) =>
         Call(name, "setRoundCornerRadius", topLeft, topRight, bottomLeft, bottomRight);
 
     public static void SetBouncesEnabled(string name, bool enabled) => Call(name, "setScrollBounceEnabled", enabled);
+    public static void SetConsoleMessageEnabled(string name, bool enabled) => Call(name, "setConsoleMessageEnabled", enabled);
     public static void SetPaused(string name, bool paused) => Call(name, paused ? "pause" : "resume");
 
     public static void ClearCache()
     {
         using (var cls = new AndroidJavaClass(ClassName)) cls.CallStatic("clearSharedCache");
-    }
-
-    public static void SetForwardWebConsoleToNativeOutput(bool enabled)
-    {
-        using (var cls = new AndroidJavaClass(ClassName)) cls.CallStatic("setForwardWebConsoleToNativeOutput", enabled);
     }
 
     static void Call(string name, string method, params object[] args)
