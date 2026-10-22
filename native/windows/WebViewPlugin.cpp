@@ -6,9 +6,13 @@
  * Uses Microsoft WebView2 (Edge Chromium). Requires WebView2 Runtime.
  */
 
-// Modified for goat-webview: copied from gree/unity-webview plugins/Windows/WebViewPlugin.cpp and only
-// renamed the GetMessage message names to the goat-webview event names (the Android/iOS UnitySendMessage
-// method names): CallFromJS -> OnMessageReceived, CallOnStarted -> OnPageStarted, CallOnLoaded -> OnPageFinished.
+// 수정됨: gree/unity-webview plugins/Windows/WebViewPlugin.cpp를 goat-webview용으로 옮긴 파일이다(Unity Editor 전용).
+// macOS 번들(native/macos/Sources/WebView.mm)과 같은 동작을 목표로 한다.
+// - 이벤트 이름과 JSON을 iOS·Android Unity 래퍼에 맞췄다: OnPageStarted{url}, OnPageFinished{url,statusCode},
+//   OnLoadingErrorReceived{kind,errorCode,errorMessage,url}, OnMessageReceived{message,origin}.
+// - JavaScript 결과를 OnJavaScriptResult{requestId,result}로 돌려주는 _CWebViewPlugin_EvaluateJavaScript를 더했다.
+// - 웹 콘솔과 잡히지 않은 예외를 OnConsoleMessage{level,message,source,line}로 보낸다.
+// - 비트맵은 macOS 번들과 같은 top-down 행 순서다. Unity 텍스처 원점이 좌하단이라 C# GoatWebViewEditorView가 뒤집어 그린다.
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -63,6 +67,107 @@ struct MessageQueue {
 };
 
 //------------------------------------------------------------------------------
+// 문자열·JSON 도우미
+//------------------------------------------------------------------------------
+static std::string WideToUtf8(LPCWSTR w) {
+    if (!w) return std::string();
+    int n = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
+    if (n <= 1) return std::string();
+    std::string s((size_t)n - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, w, -1, &s[0], n, nullptr, nullptr);
+    return s;
+}
+
+// 호출자가 delete[] 한다.
+static wchar_t* Utf8ToWideAlloc(const char* s) {
+    int n = MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);
+    if (n <= 0) n = 1;
+    wchar_t* w = new wchar_t[n];
+    w[0] = 0;
+    MultiByteToWideChar(CP_UTF8, 0, s, -1, w, n);
+    return w;
+}
+
+static std::string JsonEscape(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() + 8);
+    for (unsigned char c : s) {
+        switch (c) {
+        case '"': out += "\\\""; break;
+        case '\\': out += "\\\\"; break;
+        case '\n': out += "\\n"; break;
+        case '\r': out += "\\r"; break;
+        case '\t': out += "\\t"; break;
+        default:
+            if (c < 0x20) {
+                char b[8];
+                snprintf(b, sizeof(b), "\\u%04x", c);
+                out += b;
+            } else {
+                out += (char)c;
+            }
+        }
+    }
+    return out;
+}
+
+static std::string JsonString(const std::string& s) {
+    return "\"" + JsonEscape(s) + "\"";
+}
+
+// "https://Host:443/path" → "https://host" (iOS·Android 래퍼의 origin과 같은 형식). 기본 포트는 생략하고, 파싱할 수 없으면 ""다.
+static std::string OriginOf(const std::string& url) {
+    size_t schemeEnd = url.find("://");
+    if (schemeEnd == std::string::npos) return std::string();
+    std::string scheme = url.substr(0, schemeEnd);
+    size_t hostStart = schemeEnd + 3;
+    size_t hostEnd = url.find_first_of("/?#", hostStart);
+    std::string authority = url.substr(hostStart, hostEnd == std::string::npos ? std::string::npos : hostEnd - hostStart);
+    size_t at = authority.rfind('@');
+    if (at != std::string::npos) authority = authority.substr(at + 1);
+    std::string host = authority, port;
+    size_t colon = authority.rfind(':');
+    if (colon != std::string::npos && authority.find(']') == std::string::npos) {
+        host = authority.substr(0, colon);
+        port = authority.substr(colon + 1);
+    }
+    if (host.empty()) return std::string();
+    for (auto& c : scheme) c = (char)tolower((unsigned char)c);
+    for (auto& c : host) c = (char)tolower((unsigned char)c);
+    if (scheme != "http" && scheme != "https") return std::string();
+    const char* defaultPort = scheme == "https" ? "443" : "80";
+    if (port.empty() || port == defaultPort) return scheme + "://" + host;
+    return scheme + "://" + host + ":" + port;
+}
+
+static const char* WebErrorStatusName(COREWEBVIEW2_WEB_ERROR_STATUS status) {
+    switch (status) {
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_COMMON_NAME_IS_INCORRECT: return "CERTIFICATE_COMMON_NAME_IS_INCORRECT";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_EXPIRED: return "CERTIFICATE_EXPIRED";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CLIENT_CERTIFICATE_CONTAINS_ERRORS: return "CLIENT_CERTIFICATE_CONTAINS_ERRORS";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_REVOKED: return "CERTIFICATE_REVOKED";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_IS_INVALID: return "CERTIFICATE_IS_INVALID";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_SERVER_UNREACHABLE: return "SERVER_UNREACHABLE";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_TIMEOUT: return "TIMEOUT";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_ERROR_HTTP_INVALID_SERVER_RESPONSE: return "ERROR_HTTP_INVALID_SERVER_RESPONSE";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_ABORTED: return "CONNECTION_ABORTED";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_RESET: return "CONNECTION_RESET";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_DISCONNECTED: return "DISCONNECTED";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CANNOT_CONNECT: return "CANNOT_CONNECT";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_HOST_NAME_NOT_RESOLVED: return "HOST_NAME_NOT_RESOLVED";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED: return "OPERATION_CANCELED";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_REDIRECT_FAILED: return "REDIRECT_FAILED";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_UNEXPECTED_ERROR: return "UNEXPECTED_ERROR";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_VALID_AUTHENTICATION_CREDENTIALS_REQUIRED: return "VALID_AUTHENTICATION_CREDENTIALS_REQUIRED";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_VALID_PROXY_AUTHENTICATION_REQUIRED: return "VALID_PROXY_AUTHENTICATION_REQUIRED";
+    default: return "UNKNOWN";
+    }
+}
+
+// 콘솔 메시지는 Unity.call 메시지와 같은 postMessage 채널을 쓰므로 이 접두어로 구분한다.
+static const char kConsolePrefix[] = "\x01goatConsole:";
+
+//------------------------------------------------------------------------------
 // Instance state
 //------------------------------------------------------------------------------
 struct WebViewInstance {
@@ -109,6 +214,20 @@ struct WebViewInstance {
 static std::mutex s_instancesMutex;
 static std::vector<std::unique_ptr<WebViewInstance>> s_instances;
 
+// macOS 번들(sendMessage:fields:)과 같은 "메서드:{json}" 형식. C#은 첫 ':' 앞을 메서드 이름, 뒤를 JSON으로 읽는다.
+// fields는 이미 JSON 조각("\"url\":\"...\",\"statusCode\":200")이다.
+static void PushEvent(WebViewInstance* inst, const char* method, const std::string& fields) {
+    inst->messages.push(std::string(method) + ":{" + fields + "}");
+}
+
+static std::string CurrentUrl(ICoreWebView2* wv) {
+    LPWSTR raw = nullptr;
+    if (!wv || FAILED(wv->get_Source(&raw)) || !raw) return std::string();
+    std::string s = WideToUtf8(raw);
+    CoTaskMemFree(raw);
+    return s;
+}
+
 //------------------------------------------------------------------------------
 // PNG stream -> RGBA using WIC
 //------------------------------------------------------------------------------
@@ -142,6 +261,8 @@ static bool DecodePngStreamToRgba(IStream* stream, std::vector<uint8_t>& outPixe
 
     UINT stride = width * 4;
     UINT size = stride * height;
+    // 행 순서는 위→아래(top-down)로 그대로 둔다. macOS 번들의 NSBitmapImageRep과 같고,
+    // Unity 텍스처는 좌하단이 원점이라 C#(GoatWebViewEditorView)이 그릴 때 뒤집는다. 여기서 뒤집으면 이중 반전이 된다.
     outPixels.resize(size);
     hr = converter->CopyPixels(nullptr, stride, size, outPixels.data());
     if (FAILED(hr)) return false;
@@ -160,6 +281,7 @@ enum CustomMsg {
     WM_WEBVIEW_LOAD_URL,
     WM_WEBVIEW_LOAD_HTML,
     WM_WEBVIEW_EVAL_JS,
+    WM_WEBVIEW_EVAL_JS_RESULT,
     WM_WEBVIEW_SET_RECT,
     WM_WEBVIEW_SET_VISIBILITY,
     WM_WEBVIEW_GO_BACK,
@@ -178,6 +300,11 @@ struct MouseEventData {
     int x, y;
     float deltaY;
     int mouseState;
+};
+
+struct EvalData {
+    int requestId;
+    wchar_t* js;  // owned; STA thread must free
 };
 
 struct KeyEventData {
@@ -276,24 +403,97 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                                     settings->put_AreDefaultScriptDialogsEnabled(TRUE);
                                 }
 
-                                // Inject Unity.call for JS -> C#
-                                std::wstring script = L"window.Unity = { call: function(msg) { window.chrome.webview.postMessage(msg); } };";
+                                // JS → C#: window.Unity.call(msg)는 postMessage로 보내고 WebMessageReceived에서 OnMessageReceived로 바꾼다.
+                                std::wstring script = L"window.Unity = { call: function(msg) { window.chrome.webview.postMessage(String(msg)); } };";
                                 inst->webview->AddScriptToExecuteOnDocumentCreated(script.c_str(), nullptr);
+
+                                // 웹 콘솔(console.debug/log/info/warn/error)과 잡히지 않은 예외를 OnConsoleMessage로 보낸다(macOS 번들·iOS SDK와 같다).
+                                // 같은 postMessage 채널을 쓰므로 kConsolePrefix를 붙여 Unity.call 메시지와 구분한다. 전송 여부는 C#이 거른다.
+                                std::wstring consoleScript =
+                                    L"(function() {\n"
+                                    L"    var bridge = window.chrome && window.chrome.webview;\n"
+                                    L"    if (!bridge || window.__goatConsoleInstalled)\n"
+                                    L"        return;\n"
+                                    L"    window.__goatConsoleInstalled = true;\n"
+                                    L"    var sending = false;\n"
+                                    L"    function text(value) {\n"
+                                    L"        if (typeof value === 'string')\n"
+                                    L"            return value;\n"
+                                    L"        if (value instanceof Error)\n"
+                                    L"            return String(value);\n"
+                                    L"        if (value !== null && typeof value === 'object') {\n"
+                                    L"            try {\n"
+                                    L"                var json = JSON.stringify(value);\n"
+                                    L"                if (json !== undefined)\n"
+                                    L"                    return json;\n"
+                                    L"            } catch (e) {}\n"
+                                    L"        }\n"
+                                    L"        return String(value);\n"
+                                    L"    }\n"
+                                    L"    function callerLocation(stack) {\n"
+                                    L"        var lines = String(stack || '').split('\\n');\n"
+                                    L"        for (var i = 0; i < lines.length; i++) {\n"
+                                    L"            var match = lines[i].match(/([a-z][a-z0-9+.-]*:[^@\\s()]*):(\\d+):\\d+\\)?$/i);\n"
+                                    L"            if (match)\n"
+                                    L"                return { source: match[1], line: Number(match[2]) };\n"
+                                    L"        }\n"
+                                    L"        return { source: window.location.href, line: 0 };\n"
+                                    L"    }\n"
+                                    L"    function send(level, message, source, line) {\n"
+                                    L"        if (sending)\n"
+                                    L"            return;\n"
+                                    L"        sending = true;\n"
+                                    L"        try {\n"
+                                    L"            bridge.postMessage('\\u0001goatConsole:' + JSON.stringify({ level: level, message: message, source: source, line: line }));\n"
+                                    L"        } catch (e) {\n"
+                                    L"        } finally {\n"
+                                    L"            sending = false;\n"
+                                    L"        }\n"
+                                    L"    }\n"
+                                    L"    var levels = { debug: 'DEBUG', log: 'LOG', info: 'LOG', warn: 'WARNING', error: 'ERROR' };\n"
+                                    L"    Object.keys(levels).forEach(function(name) {\n"
+                                    L"        var original = console[name];\n"
+                                    L"        console[name] = function() {\n"
+                                    L"            if (typeof original === 'function')\n"
+                                    L"                original.apply(console, arguments);\n"
+                                    L"            var where = callerLocation(new Error().stack);\n"
+                                    L"            send(levels[name], Array.prototype.map.call(arguments, text).join(' '), where.source, where.line);\n"
+                                    L"        };\n"
+                                    L"    });\n"
+                                    L"    window.addEventListener('error', function(event) {\n"
+                                    L"        send('ERROR', event.message || text(event.error), event.filename || window.location.href, event.lineno || 0);\n"
+                                    L"    });\n"
+                                    L"    window.addEventListener('unhandledrejection', function(event) {\n"
+                                    L"        send('ERROR', 'Unhandled promise rejection: ' + text(event.reason), window.location.href, 0);\n"
+                                    L"    });\n"
+                                    L"})();\n";
+                                inst->webview->AddScriptToExecuteOnDocumentCreated(consoleScript.c_str(), nullptr);
 
                                 // Message from JS
                                 inst->webview->add_WebMessageReceived(
                                     Callback<ICoreWebView2WebMessageReceivedEventHandler>(
                                         [inst](ICoreWebView2* wv, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
                                             LPWSTR msgRaw = nullptr;
-                                            args->TryGetWebMessageAsString(&msgRaw);
-                                            if (msgRaw) {
-                                                int n = WideCharToMultiByte(CP_UTF8, 0, msgRaw, -1, nullptr, 0, nullptr, nullptr);
-                                                std::string s(n, 0);
-                                                WideCharToMultiByte(CP_UTF8, 0, msgRaw, -1, &s[0], n, nullptr, nullptr);
-                                                if (s.back() == '\0') s.pop_back();
-                                                inst->messages.push("OnMessageReceived:" + s);
-                                                CoTaskMemFree(msgRaw);
+                                            // 문자열이 아닌 postMessage(객체 등)는 Unity.call 규약이 아니므로 버린다.
+                                            if (FAILED(args->TryGetWebMessageAsString(&msgRaw)) || !msgRaw) return S_OK;
+                                            std::string s = WideToUtf8(msgRaw);
+                                            CoTaskMemFree(msgRaw);
+                                            const size_t prefixLen = sizeof(kConsolePrefix) - 1;
+                                            if (s.compare(0, prefixLen, kConsolePrefix) == 0) {
+                                                // 스크립트가 만든 JSON 객체 본문을 그대로 넘긴다.
+                                                std::string json = s.substr(prefixLen);
+                                                if (json.size() >= 2 && json.front() == '{' && json.back() == '}')
+                                                    PushEvent(inst, "OnConsoleMessage", json.substr(1, json.size() - 2));
+                                                return S_OK;
                                             }
+                                            LPWSTR sourceRaw = nullptr;
+                                            std::string origin;
+                                            if (SUCCEEDED(args->get_Source(&sourceRaw)) && sourceRaw) {
+                                                origin = OriginOf(WideToUtf8(sourceRaw));
+                                                CoTaskMemFree(sourceRaw);
+                                            }
+                                            PushEvent(inst, "OnMessageReceived",
+                                                "\"message\":" + JsonString(s) + ",\"origin\":" + JsonString(origin));
                                             return S_OK;
                                         }).Get(), nullptr);
 
@@ -305,11 +505,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                                             LPWSTR uriRaw = nullptr;
                                             args->get_Uri(&uriRaw);
                                             if (uriRaw) {
-                                                int n = WideCharToMultiByte(CP_UTF8, 0, uriRaw, -1, nullptr, 0, nullptr, nullptr);
-                                                std::string uri(n, 0);
-                                                WideCharToMultiByte(CP_UTF8, 0, uriRaw, -1, &uri[0], n, nullptr, nullptr);
-                                                if (uri.back() == '\0') uri.pop_back();
-                                                inst->messages.push("OnPageStarted:" + uri);
+                                                PushEvent(inst, "OnPageStarted", "\"url\":" + JsonString(WideToUtf8(uriRaw)));
                                                 CoTaskMemFree(uriRaw);
                                             }
                                             return S_OK;
@@ -324,17 +520,24 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                                             BOOL success = FALSE;
                                             args->get_IsSuccess(&success);
                                             inst->progress = success ? 100 : 0;
+                                            std::string uri = CurrentUrl(wv);
                                             if (success) {
-                                                LPWSTR uriRaw = nullptr;
-                                                wv->get_Source(&uriRaw);
-                                                if (uriRaw) {
-                                                    int n = WideCharToMultiByte(CP_UTF8, 0, uriRaw, -1, nullptr, 0, nullptr, nullptr);
-                                                    std::string uri(n, 0);
-                                                    WideCharToMultiByte(CP_UTF8, 0, uriRaw, -1, &uri[0], n, nullptr, nullptr);
-                                                    if (uri.back() == '\0') uri.pop_back();
-                                                    inst->messages.push("OnPageFinished:" + uri);
-                                                    CoTaskMemFree(uriRaw);
+                                                // HTTP 4xx·5xx도 문서 로드는 끝나므로 Android·macOS처럼 OnPageFinished의 statusCode로 알린다.
+                                                int statusCode = 200;
+                                                ComPtr<ICoreWebView2NavigationCompletedEventArgs2> args2;
+                                                if (SUCCEEDED(args->QueryInterface(IID_PPV_ARGS(&args2))) && args2) {
+                                                    int http = 0;
+                                                    if (SUCCEEDED(args2->get_HttpStatusCode(&http)) && http >= 400) statusCode = http;
                                                 }
+                                                PushEvent(inst, "OnPageFinished",
+                                                    "\"url\":" + JsonString(uri) + ",\"statusCode\":" + std::to_string(statusCode));
+                                            } else {
+                                                COREWEBVIEW2_WEB_ERROR_STATUS status = COREWEBVIEW2_WEB_ERROR_STATUS_UNKNOWN;
+                                                args->get_WebErrorStatus(&status);
+                                                PushEvent(inst, "OnLoadingErrorReceived",
+                                                    "\"kind\":\"NETWORK\",\"errorCode\":" + std::to_string((int)status) +
+                                                    ",\"errorMessage\":" + JsonString(WebErrorStatusName(status)) +
+                                                    ",\"url\":" + (uri.empty() ? std::string("null") : JsonString(uri)));
                                             }
                                             BOOL back = FALSE, fwd = FALSE;
                                             wv->get_CanGoBack(&back);
@@ -415,12 +618,30 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         return 0;
     }
     case WM_WEBVIEW_EVAL_JS: {
+        wchar_t* js = (wchar_t*)lParam;
         if (inst && inst->webview) {
-            wchar_t* js = (wchar_t*)lParam;
             inst->webview->ExecuteScript(js, Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
                 [](HRESULT err, LPCWSTR result) -> HRESULT { return S_OK; }).Get());
-            delete[] js;
         }
+        delete[] js;
+        return 0;
+    }
+    case WM_WEBVIEW_EVAL_JS_RESULT: {
+        EvalData* data = (EvalData*)lParam;
+        if (!data) return 0;
+        if (inst && inst->webview) {
+            int requestId = data->requestId;
+            inst->webview->ExecuteScript(data->js, Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+                [inst, requestId](HRESULT err, LPCWSTR result) -> HRESULT {
+                    // macOS 번들처럼 결과를 JSON 문자열로 보내고, 오류·undefined·null은 null로 보낸다. WebView2의 result는 이미 JSON이다.
+                    std::string value = (FAILED(err) || !result) ? std::string("null") : WideToUtf8(result);
+                    std::string field = (value == "null") ? std::string("null") : JsonString(value);
+                    PushEvent(inst, "OnJavaScriptResult", "\"requestId\":" + std::to_string(requestId) + ",\"result\":" + field);
+                    return S_OK;
+                }).Get());
+        }
+        delete[] data->js;
+        delete data;
         return 0;
     }
     case WM_WEBVIEW_SET_RECT: {
@@ -781,10 +1002,15 @@ __declspec(dllexport) void _CWebViewPlugin_LoadHTML(void* instance, const char* 
 __declspec(dllexport) void _CWebViewPlugin_EvaluateJS(void* instance, const char* js) {
     WebViewInstance* inst = (WebViewInstance*)instance;
     if (!inst || inst->destroying || !js) return;
-    int n = MultiByteToWideChar(CP_UTF8, 0, js, -1, nullptr, 0);
-    wchar_t* w = new wchar_t[n];
-    MultiByteToWideChar(CP_UTF8, 0, js, -1, w, n);
-    PostMessage(inst->hwnd, WM_WEBVIEW_EVAL_JS, 0, (LPARAM)w);
+    PostMessage(inst->hwnd, WM_WEBVIEW_EVAL_JS, 0, (LPARAM)Utf8ToWideAlloc(js));
+}
+
+// 결과를 OnJavaScriptResult{requestId,result}로 돌려준다(macOS 번들·iOS·Android 래퍼와 같다).
+__declspec(dllexport) void _CWebViewPlugin_EvaluateJavaScript(void* instance, int requestId, const char* js) {
+    WebViewInstance* inst = (WebViewInstance*)instance;
+    if (!inst || inst->destroying || !js) return;
+    EvalData* data = new EvalData{ requestId, Utf8ToWideAlloc(js) };
+    PostMessage(inst->hwnd, WM_WEBVIEW_EVAL_JS_RESULT, 0, (LPARAM)data);
 }
 
 // Returns load progress 0-100. Value is 0 when navigation starts, 100 when it completes successfully, and 0 on failure.
@@ -870,6 +1096,12 @@ __declspec(dllexport) int _CWebViewPlugin_BitmapHeight(void* instance) {
     if (!inst || inst->destroying) return 0;
     std::lock_guard<std::mutex> lk(inst->bitmapMutex);
     return inst->bitmapHeight;
+}
+
+// 비트맵은 항상 RGBA다(macOS 번들의 ARGB 구분과 같은 함수).
+__declspec(dllexport) bool _CWebViewPlugin_BitmapARGB(void* instance) {
+    (void)instance;
+    return false;
 }
 
 __declspec(dllexport) void _CWebViewPlugin_Render(void* instance, void* textureBuffer) {

@@ -4,7 +4,7 @@ Unity Editor(Windows)에서 웹뷰를 확인하기 위한 WebView2 네이티브 
 [gree/unity-webview](https://github.com/gree/unity-webview)의 `plugins/Windows`를 거의 그대로 가져왔으며, 바꾼 것은 아래 두 가지뿐입니다.
 
 - `GetMessage` 메시지 이름을 Android·iOS의 UnitySendMessage 메서드 이름에 맞췄습니다.
-- DLL 이름을 `GoatWebView.dll`로 바꿨습니다(gree `WebView.dll`과 충돌 방지).
+- DLL 이름을 `GoatWebViewPlugin.dll`로 바꿨습니다(gree `WebView.dll`, 그리고 asmdef가 만드는 관리 어셈블리 `GoatWebView.dll`과 충돌 방지).
 
 ## 동작 방식
 
@@ -24,6 +24,19 @@ Unity Editor(Windows)에서 웹뷰를 확인하기 위한 WebView2 네이티브 
 
 Windows 10 이상, "C++를 사용한 데스크톱 개발"이 포함된 Visual Studio, WebView2 Runtime이 필요합니다.
 
+### Visual Studio C++ 워크로드 설치
+
+1. 이미 Visual Studio가 있으면 **Visual Studio Installer** → 설치된 제품의 **수정(Modify)** → 워크로드 탭에서 **C++를 사용한 데스크톱 개발**을 체크하고 **수정**을 누릅니다(3~5GB).
+2. 없으면 둘 중 하나를 설치합니다. 설치기에서 **C++를 사용한 데스크톱 개발**을 체크하면 MSVC v143 빌드 도구와 Windows SDK가 함께 들어옵니다.
+   - **Visual Studio 2022 Community**(IDE 포함, 무료): <https://visualstudio.microsoft.com/ko/downloads/>
+   - **Build Tools for Visual Studio 2022**(컴파일러만, 더 가벼움): 같은 페이지의 "Visual Studio 2022용 도구". `sync-unity-plugins.bat`는 Build Tools도 찾습니다.
+   - 명령줄로 한 번에 설치하려면(관리자 PowerShell):
+     ```powershell
+     winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+     ```
+3. **WebView2 Runtime**은 Windows 11과 최신 Windows 10에 이미 있습니다. 없으면 <https://developer.microsoft.com/microsoft-edge/webview2/>의 Evergreen Bootstrapper를 설치합니다. 빌드가 아니라 Unity Editor에서 웹뷰를 띄울 때 필요합니다.
+4. 설치 후 `scripts\sync-unity-plugins.bat`를 다시 실행합니다. `[3/3] 빌드 및 복사 (msbuild: ...)`가 찍히면 정상입니다.
+
 ```powershell
 cd native\windows
 .\restore_webview2_sdk.ps1        # NuGet Microsoft.Web.WebView2 1.0.3800.47 → packages\
@@ -31,12 +44,13 @@ msbuild WebViewPlugin.sln /p:Configuration=Release /p:Platform=x64
 msbuild WebViewPlugin.sln /p:Configuration=Release /p:Platform=Win32
 ```
 
-- 산출물: `bin\x64\Release\GoatWebView.dll`, `bin\Win32\Release\GoatWebView.dll`
+- 산출물: `bin\x64\Release\GoatWebViewPlugin.dll`, `bin\Win32\Release\GoatWebViewPlugin.dll`
+- 또는 저장소의 `scripts\sync-unity-plugins.bat`를 더블클릭하면 SDK 복원 → x64 빌드 → Unity 패키지 복사까지 한 번에 한다.
 - `bin\`, `packages\`, `nuget.exe`는 Git에서 제외합니다.
 - 입력 문제를 추적하려면 `WebViewPlugin.cpp` 위쪽의 `WEBVIEW_DEBUG`를 1로 바꿔 빌드하고 DebugView에서 `[WebView2]` 로그를 확인합니다.
 
 ## Unity 배치
 
-Unity 패키지 구성은 아직 정하지 않았습니다. 지금은 빌드한 DLL을 Unity 프로젝트의 `Assets/Plugins/x86_64/`(x64)에 복사하고, Inspector에서 Editor(Windows)만 선택합니다.
+x64 빌드 산출물 `bin\x64\Release\GoatWebViewPlugin.dll`을 패키지의 `unity/Packages/com.goatwebview.unity/Plugins/Windows/x86_64/`에 복사합니다. 같은 폴더에 meta가 없으면 이 폴더의 `GoatWebViewPlugin.dll.meta`(Editor·Windows·x86_64 전용 임포터 설정)를 함께 복사하므로 Inspector 설정은 필요 없습니다. DLL과 meta는 함께 커밋합니다. Unity Editor는 로드한 DLL을 내리지 않으므로 바꾼 뒤 Editor를 다시 시작합니다.
 
 코드 출처와 원본 고지는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.

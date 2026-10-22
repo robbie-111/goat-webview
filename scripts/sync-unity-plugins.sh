@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # native/의 Android AAR, iOS Swift 소스, macOS Editor 번들을 Unity 패키지(unity/Packages/com.goatwebview.unity/Plugins)로 복사한다.
+# Windows Editor DLL은 여기서 빌드하지 않는다. Windows에서 scripts\sync-unity-plugins.bat로 빌드해
+# Plugins/Windows/x86_64/GoatWebViewPlugin.dll 로 복사한다.
 # Android 빌드에는 JDK 17(JAVA_HOME)과 Android SDK(native/android/local.properties 또는 ANDROID_HOME)가,
 # macOS 번들 빌드에는 Xcode가 필요하다.
 # 복사본의 .meta는 그대로 두므로 Unity의 플러그인 설정이 유지된다. native에서 지운 파일은 직접 지운다.
