@@ -44,7 +44,6 @@ public class WebViewSampleController : MonoBehaviour
 
     void Start()
     {
-        GoatWebView.SetForwardWebConsoleToNativeOutput(true);
         SetStatus("웹뷰 없음");
         UpdateSelection();
         backButton.SetActive(false);
@@ -98,7 +97,7 @@ public class WebViewSampleController : MonoBehaviour
     {
         safeAreaIndex = index;
         UpdateSelection();
-        if (webView != null) webView.SetTopSafeAreaColor(SafeAreaColors[index]);
+        if (webView != null) webView.SetStatusBarColor(SafeAreaColors[index]);
     }
 
     public void OnClickCornerRadius(int index)
@@ -124,7 +123,12 @@ public class WebViewSampleController : MonoBehaviour
             // Android는 렌더러가 종료되면 웹뷰를 더 쓸 수 없다.
             if (error.Kind == GoatWebViewLoadingError.ErrorKind.Renderer) CloseWebView(statusText.text);
         };
-        webView.SetTopSafeAreaColor(SafeAreaColors[safeAreaIndex]);
+        // 폴백 화면의 닫기 버튼으로 네이티브가 웹뷰를 해제했다.
+        webView.OnClosed += view => CloseWebView("웹뷰를 닫았습니다.");
+        // 샘플은 웹 페이지 디버깅을 위해 웹 콘솔 로그를 Unity 콘솔로 출력한다.
+        webView.SetConsoleMessageEnabled(true);
+        webView.OnConsoleMessage += (view, message) => Debug.Log($"[WebConsole] {message}");
+        webView.SetStatusBarColor(SafeAreaColors[safeAreaIndex]);
         webView.SetBouncesEnabled(bounceToggle.isOn);
         ApplyCornerRadius();
         ApplyPopupFrame();

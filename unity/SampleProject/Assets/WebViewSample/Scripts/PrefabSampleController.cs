@@ -21,6 +21,12 @@ public class PrefabSampleController : MonoBehaviour
         statusText.text = "로드 중";
         webView.OnPageFinished += (view, statusCode, url) => statusText.text = $"Finished {url} ({statusCode})";
         webView.OnLoadingErrorReceived += (view, error) => statusText.text = $"Error {error.ErrorCode}: {error.ErrorMessage}";
+        // 폴백 화면의 닫기 버튼으로 네이티브가 웹뷰를 해제했다. 이후 Show는 무시된다.
+        webView.OnClosed += view =>
+        {
+            dim.SetActive(false);
+            statusText.text = "웹뷰를 닫았습니다.";
+        };
     }
 
     void Update()
