@@ -24,9 +24,8 @@
 //   delegate와 호스트가 넘기는 parentView로 바꿨다.
 // - 메시지 수신에 메인 프레임·허용 출처 검사를, 로드 전후에 네이티브 폴백 화면을, 상단 safe area 띠를 추가했다.
 // - 서버 리다이렉트도 로드 시작으로 알린다.
-// - 스크롤 바운스 설정과 웹 콘솔 로그의 네이티브 출력(Android webview-sdk와 같은 기능)을 추가했다.
+// - 스크롤 바운스 설정과 웹 콘솔 메시지 전달(Android webview-sdk와 같은 기능)을 추가했다.
 
-import os
 import UIKit
 import WebKit
 
@@ -42,15 +41,6 @@ import WebKit
 public final class WebViewPlugin: NSObject {
     static let messageHandlerName = "unityControl"
     static let consoleHandlerName = "goatConsole"
-    private static let consoleLogger = Logger(subsystem: "GoatWebView", category: "console")
-    private static var forwardWebConsoleToNativeOutput = false
-
-    /// 모든 웹뷰의 웹 콘솔 로그(`console.log` 등)를 네이티브 로그(subsystem `GoatWebView`)에 레벨별로 출력할지 정한다.
-    /// 기본값은 false이며 이미 만든 웹뷰에도 바로 적용된다. 웹 콘솔에는 토큰 등이 포함될 수 있다.
-    /// UniWebView의 SetForwardWebConsoleToNativeOutput, Android `WebViewController.setForwardWebConsoleToNativeOutput`에 대응한다.
-    public static func setForwardWebConsoleToNativeOutput(_ enabled: Bool) {
-        forwardWebConsoleToNativeOutput = enabled
-    }
 
     public weak var delegate: WebViewPluginDelegate?
 
@@ -158,9 +148,9 @@ public final class WebViewPlugin: NSObject {
             source: WebViewPlugin.bridgeScript(allowedOrigins: allowedOrigins),
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true))
-        // 콘솔 전달 스크립트는 항상 설치하고, 출력 여부는 네이티브가 정한다(설정을 바로 반영하기 위해).
+        // 웹 콘솔은 Android onConsoleMessage처럼 iframe 것도 받는다. 보낼지는 호스트가 정한다.
         controller.addUserScript(WKUserScript(
-            source: WebViewPlugin.consoleScript,
+            source: WebViewPlugin.consoleScript(),
             injectionTime: .atDocumentStart,
             forMainFrameOnly: false))
     }
@@ -251,8 +241,8 @@ public final class WebViewPlugin: NSObject {
     /// 컨테이너 위쪽 safe area(상태바·노치 영역)를 (r, g, b, a) 색으로 칠한다. 폴백 화면과 웹뷰는 색과 상관없이 그 아래부터 채운다.
     /// 각 값은 0...1이며 `a`가 0이면(기본값) 칠하지 않고 투명하게 비운다. 아래쪽 safe area(홈 인디케이터)와 좌우는 칠하지 않는다.
     /// Unity C#의 `Color`를 변환 없이 넘길 수 있도록 Android와 같은 원시 타입을 받는다. 상태바 아이콘 색은 호스트의 뷰 컨트롤러가 정한다.
-    public func setTopSafeAreaColor(r: Float, g: Float, b: Float, a: Float) {
-        containerView?.topSafeAreaColor = a <= 0
+    public func setStatusBarColor(r: Float, g: Float, b: Float, a: Float) {
+        containerView?.statusBarColor = a <= 0
             ? nil
             : UIColor(red: CGFloat(r), green: CGFloat(g), blue: CGFloat(b), alpha: CGFloat(a))
     }
@@ -283,8 +273,8 @@ public final class WebViewPlugin: NSObject {
 
     // MARK: - Internal
 
-    var topSafeAreaView: UIView? {
-        containerView?.topSafeAreaView
+    var statusBarView: UIView? {
+        containerView?.statusBarView
     }
 
     var isWebViewVisible: Bool {
@@ -316,11 +306,15 @@ public final class WebViewPlugin: NSObject {
     }
 
     fileprivate func didReceiveScriptMessage(_ message: WKScriptMessage) {
+        guard webView != nil else { return }
         if message.name == WebViewPlugin.consoleHandlerName {
-            logConsoleMessage(message)
+            // 출처·프레임 제한 없이 넘긴다. 토큰 등이 포함될 수 있으므로 출력 여부는 호스트가 정한다.
+            if let consoleMessage = WebViewConsoleMessage(body: message.body) {
+                delegate?.webViewPlugin(self, didReceiveConsoleMessage: consoleMessage)
+            }
             return
         }
-        guard webView != nil, message.name == WebViewPlugin.messageHandlerName else { return }
+        guard message.name == WebViewPlugin.messageHandlerName else { return }
         // upstream은 프레임과 출처를 확인하지 않는다. iframe이나 허용하지 않은 출처의 메시지는 버린다.
         guard message.frameInfo.isMainFrame, let body = message.body as? String else { return }
         let origin = WebViewPlugin.origin(of: message.frameInfo.securityOrigin)
@@ -329,19 +323,6 @@ public final class WebViewPlugin: NSObject {
         }
         lastMessageOrigin = origin
         delegate?.webViewPlugin(self, didReceiveMessage: body)
-    }
-
-    private func logConsoleMessage(_ message: WKScriptMessage) {
-        guard webView != nil, WebViewPlugin.forwardWebConsoleToNativeOutput,
-              let body = message.body as? [String: Any], let text = body["message"] as? String else { return }
-        let type: OSLogType
-        switch body["level"] as? String {
-        case "error": type = .error
-        case "warn": type = .default
-        case "debug": type = .debug
-        default: type = .info
-        }
-        WebViewPlugin.consoleLogger.log(level: type, "\(text, privacy: .public)")
     }
 
     fileprivate func didStartProvisionalNavigation(_ webView: WKWebView) {

@@ -1,4 +1,5 @@
 import GoatWebViewSDK
+import os
 import SwiftUI
 import UIKit
 
@@ -77,6 +78,20 @@ struct WebViewHost: UIViewRepresentable {
             self.plugin = nil
             parent.onClosed()
         }
+
+        // 샘플은 웹 페이지 디버깅을 위해 웹 콘솔 로그를 네이티브 로그(subsystem GoatWebViewSample, category WebConsole)로 출력한다.
+        func webViewPlugin(_ plugin: WebViewPlugin, didReceiveConsoleMessage message: WebViewConsoleMessage) {
+            let type: OSLogType
+            switch message.level {
+            case .error: type = .error
+            case .warning: type = .default
+            case .debug: type = .debug
+            case .log: type = .info
+            }
+            Self.consoleLogger.log(level: type, "\(message.message, privacy: .public) (\(message.source, privacy: .public):\(message.line))")
+        }
+
+        private static let consoleLogger = Logger(subsystem: "GoatWebViewSample", category: "WebConsole")
     }
 }
 

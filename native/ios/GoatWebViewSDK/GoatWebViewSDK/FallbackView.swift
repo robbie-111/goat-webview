@@ -57,8 +57,9 @@ final class FallbackView: UIView {
             activityIndicator.centerYAnchor.constraint(equalTo: centerYAnchor),
             failureImageView.centerXAnchor.constraint(equalTo: centerXAnchor),
             failureImageView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            closeButton.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 8),
-            closeButton.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -8),
+            // ContainerView가 이미 상태바·노치를 피한 contentView에 놓이므로 Android처럼 뷰 가장자리에서 8pt
+            closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             closeButton.widthAnchor.constraint(equalToConstant: 44),
             closeButton.heightAnchor.constraint(equalToConstant: 44),
         ])

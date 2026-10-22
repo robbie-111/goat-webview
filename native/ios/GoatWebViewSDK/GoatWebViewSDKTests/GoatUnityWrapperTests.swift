@@ -102,7 +102,7 @@ final class GoatUnityWrapperTests: XCTestCase {
         ]])
     }
 
-    func testFallbackCloseButtonDestroysWebViewWithoutMessage() throws {
+    func testFallbackCloseButtonDestroysWebViewAndSendsOnClosed() throws {
         XCTAssertTrue(goatwebview_create("a"))
         goatwebview_set_allowed_message_origins("a", "https://example.com")
         let plugin = try XCTUnwrap(GoatUnityWrapper.wrappers["a"]?.plugin)
@@ -111,7 +111,7 @@ final class GoatUnityWrapperTests: XCTestCase {
         plugin.fallbackView?.closeButton.sendActions(for: .touchUpInside)
         XCTAssertNil(container.superview, "백판과 웹뷰를 함께 해제한다")
         XCTAssertNil(GoatUnityWrapper.wrappers["a"])
-        XCTAssertTrue(messages.isEmpty, "Unity에는 보내지 않는다")
+        XCTAssertEqual(messages.map { $0.method }, ["OnClosed"], "닫힘을 Unity에 알린다")
         XCTAssertTrue(goatwebview_create("a"), "같은 이름으로 다시 만들 수 있다")
     }
 
@@ -162,6 +162,10 @@ final class GoatUnityWrapperTests: XCTestCase {
         XCTAssertEqual(container.frame, CGRect(x: floor(bounds.width * 0.1), y: floor(safeTop + available * 0.2),
                                                width: floor(bounds.width * 0.8), height: floor(available * 0.5)))
 
+        // (0, 0, 1, 1)은 컨테이너가 safe area를 덮고(맨 위부터) 띠는 ContainerView가 그린다.
+        goatwebview_set_frame("a", 0, 0, 1, 1)
+        XCTAssertEqual(container.frame, CGRect(x: 0, y: 0, width: floor(bounds.width), height: floor(bounds.height)))
+
         // 음수 크기는 0이다.
         goatwebview_set_frame("a", 0, 0, -1, -1)
         XCTAssertEqual(container.frame.size, .zero)
@@ -172,6 +176,54 @@ final class GoatUnityWrapperTests: XCTestCase {
     private struct TimeoutError: Error {}
 
     // TestHost의 장면이 연결될 때까지 기다린다.
+    func testSideInsetsSkipOnlyTheNotchSideInLandscape() {
+        // 가로에서 UIKit은 양쪽에 같은 inset을 준다. 노치 쪽만 비우고 반대쪽은 채운다.
+        let insets = UIEdgeInsets(top: 0, left: 47, bottom: 21, right: 47)
+        var side = ContainerView.sideInsets(insets, orientation: .landscapeLeft)
+        XCTAssertEqual(side.left, 0, "landscapeLeft는 노치가 오른쪽")
+        XCTAssertEqual(side.right, 47)
+        side = ContainerView.sideInsets(insets, orientation: .landscapeRight)
+        XCTAssertEqual(side.left, 47, "landscapeRight는 노치가 왼쪽")
+        XCTAssertEqual(side.right, 0)
+        // 세로·알 수 없음은 그대로 둔다(세로는 어차피 좌우 inset이 0).
+        side = ContainerView.sideInsets(insets, orientation: .portrait)
+        XCTAssertEqual(side.left, 47)
+        XCTAssertEqual(side.right, 47)
+    }
+
+    func testConsoleMessagesAreSentOnlyWhenEnabled() async throws {
+        XCTAssertTrue(goatwebview_create("a"))
+        goatwebview_load_html("a", "<script>console.warn('off')</script>", Self.baseURL + "off")
+        try await waitUntil { !self.messages("OnPageFinished", "a").isEmpty }
+        try await pause(0.3)
+        XCTAssertTrue(messages("OnConsoleMessage", "a").isEmpty, "기본으로는 보내지 않는다")
+
+        goatwebview_set_console_message_enabled("a", true)
+        goatwebview_load_html("a", "<script>console.warn('on')</script>", Self.baseURL + "on")
+        try await waitUntil { !self.messages("OnConsoleMessage", "a").isEmpty }
+        let received = fields("OnConsoleMessage", "a")
+        XCTAssertEqual(received.map { [$0["level"], $0["message"], $0["source"]] as? [String] }, [["WARNING", "on", Self.baseURL + "on"]])
+    }
+
+    func testConsoleMessagesMapLevelsAndSerializeArguments() async throws {
+        XCTAssertTrue(goatwebview_create("a"))
+        goatwebview_set_console_message_enabled("a", true)
+        goatwebview_load_html("a", """
+            <script>
+            console.debug('d'); console.log('l', 1, {a: [1, 'x']}, null); console.info('i');
+            console.warn('w'); console.error(new Error('e'));
+            setTimeout(function() { throw new Error('thrown'); }, 0);
+            </script>
+            """, Self.baseURL)
+        try await waitUntil { self.messages("OnConsoleMessage", "a").count == 6 }
+        let received = fields("OnConsoleMessage", "a")
+        XCTAssertEqual(received.map { "\($0["level"]!) \($0["message"]!)" }, [
+            "DEBUG d", "LOG l 1 {\"a\":[1,\"x\"]} null", "LOG i", "WARNING w", "ERROR Error: e", "ERROR Error: thrown",
+        ])
+        XCTAssertEqual(received.prefix(5).map { $0["line"] as? Int }, [2, 2, 2, 3, 3], "console을 부른 줄이다")
+        XCTAssertTrue(received.allSatisfy { $0["source"] as? String == Self.baseURL })
+    }
+
     private func windowScene() async throws -> UIWindowScene {
         let deadline = Date().addingTimeInterval(10)
         while Date() < deadline {

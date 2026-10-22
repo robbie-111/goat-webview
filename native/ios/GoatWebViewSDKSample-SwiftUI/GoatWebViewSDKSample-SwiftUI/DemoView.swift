@@ -3,7 +3,7 @@ import SwiftUI
 
 private let startURL = "https://example.com"
 
-/// setTopSafeAreaColor에 넘기는 r, g, b, a(각 0...1). Off는 호출하지 않는다(SDK 기본: 상단을 투명하게 비움).
+/// setStatusBarColor에 넘기는 r, g, b, a(각 0...1). Off는 호출하지 않는다(SDK 기본: 상단을 투명하게 비움).
 enum SafeAreaPreset: String, CaseIterable, Identifiable {
     case off = "Off"
     case black = "Black"
@@ -44,7 +44,7 @@ enum CornerRadiusPreset: String, CaseIterable, Identifiable {
 extension WebViewPlugin {
     func applySafeArea(_ preset: SafeAreaPreset) {
         if let color = preset.color {
-            setTopSafeAreaColor(r: color.r, g: color.g, b: color.b, a: color.a)
+            setStatusBarColor(r: color.r, g: color.g, b: color.b, a: color.a)
         }
     }
 

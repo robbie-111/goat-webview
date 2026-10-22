@@ -20,8 +20,9 @@ private let unitySendMessage: UnitySendMessageFunction? = dlsym(UnsafeMutableRaw
 /// C#이 넘긴 GameObject 이름 하나에 WebViewPlugin 하나를 묶고, delegate 이벤트를 그 GameObject로 보낸다.
 ///
 /// 메시지는 `UnitySendMessage(gameObjectName, 메서드 이름, 이벤트별 필드 JSON)`이다. 메서드 이름과 필드는 Android unity-wrapper와 같다:
-/// OnPageStarted, OnPageFinished, OnLoadingErrorReceived, OnMessageReceived, OnJavaScriptResult.
-/// 폴백 화면의 닫기 버튼은 SDK가 직접 해제하며 Unity에는 보내지 않는다.
+/// OnPageStarted, OnPageFinished, OnLoadingErrorReceived, OnMessageReceived, OnJavaScriptResult, OnConsoleMessage, OnClosed.
+/// 웹 콘솔(OnConsoleMessage)은 토큰 등이 포함될 수 있어 기본으로 보내지 않으며 `goatwebview_set_console_message_enabled`로 켠다.
+/// 폴백 화면의 닫기 버튼은 SDK가 직접 해제하고 OnClosed로 알린다.
 @MainActor
 final class GoatUnityWrapper: WebViewPluginDelegate {
     static let invalidCall = "INVALID_CALL"
@@ -39,6 +40,8 @@ final class GoatUnityWrapper: WebViewPluginDelegate {
     let parentView: UIView
     // 이번 탐색의 메인 문서 HTTP 오류 상태. Android처럼 OnPageFinished의 statusCode로 보낸다.
     private var httpErrorStatus: Int?
+    /// 웹 콘솔 메시지를 OnConsoleMessage로 보낼지. 기본값은 false다.
+    var consoleMessageEnabled = false
 
     init(gameObjectName: String, plugin: WebViewPlugin, parentView: UIView) {
         self.gameObjectName = gameObjectName
@@ -101,9 +104,16 @@ final class GoatUnityWrapper: WebViewPluginDelegate {
         httpErrorStatus = statusCode
     }
 
-    // 폴백 화면의 닫기 버튼으로 SDK가 이미 해제했다. Unity에는 알리지 않고 이름만 비워 같은 이름으로 다시 만들 수 있게 한다.
+    // 폴백 화면의 닫기 버튼으로 SDK가 이미 해제했다. OnClosed로 알리고 이름을 비워 같은 이름으로 다시 만들 수 있게 한다(Android 래퍼와 같음).
     func webViewPluginDidClose(_ plugin: WebViewPlugin) {
         GoatUnityWrapper.wrappers.removeValue(forKey: gameObjectName)
+        send("OnClosed", [:])
+    }
+
+    func webViewPlugin(_ plugin: WebViewPlugin, didReceiveConsoleMessage message: WebViewConsoleMessage) {
+        guard consoleMessageEnabled else { return }
+        send("OnConsoleMessage", ["level": message.level.rawValue, "message": message.message,
+                                  "source": message.source, "line": message.line])
     }
 
     private func sendLoadingError(_ kind: String, _ errorCode: Int, _ errorMessage: String, _ url: String?) {
@@ -226,7 +236,8 @@ public func goatwebview_stop_loading(_ gameObjectName: UnsafePointer<CChar>?) {
 // MARK: - 레이아웃·표시
 
 /// Android unity-wrapper `setFrame`과 같다. 상단 safe area(상태바·노치)를 뺀 부모 뷰 영역에 대한 비율(0...1)이며,
-/// 원점은 safe area 바로 아래의 좌상단이다. 프레임이 safe area 아래에 놓이므로 컨테이너가 위쪽을 다시 비우지 않는다.
+/// 원점은 safe area 바로 아래의 좌상단이다. 프레임이 safe area에 닿으면(y == 0) 컨테이너를 부모 맨 위까지 늘려
+/// ContainerView가 겹치는 safe area만큼 비우고 상단 띠를 칠하게 한다(Android 래퍼·네이티브 샘플 Fullscreen과 같은 배치).
 /// Android 래퍼가 LayoutParams를 바꾸듯 컨테이너 frame을 직접 정한다. 결과는 내림하고 음수 크기는 0으로 둔다.
 @_cdecl("goatwebview_set_frame")
 public func goatwebview_set_frame(_ gameObjectName: UnsafePointer<CChar>?, _ x: Float, _ y: Float, _ width: Float, _ height: Float) {
@@ -236,10 +247,11 @@ public func goatwebview_set_frame(_ gameObjectName: UnsafePointer<CChar>?, _ x: 
         let bounds = wrapper.parentView.bounds
         let safeTop = min(wrapper.parentView.safeAreaInsets.top, bounds.height)
         let available = bounds.height - safeTop
+        let touchesTop = y <= 0
         containerView.frame = CGRect(x: floor(CGFloat(x) * bounds.width),
-                                     y: floor(safeTop + CGFloat(y) * available),
+                                     y: touchesTop ? 0 : floor(safeTop + CGFloat(y) * available),
                                      width: floor(max(CGFloat(width) * bounds.width, 0)),
-                                     height: floor(max(CGFloat(height) * available, 0)))
+                                     height: floor(max(CGFloat(height) * available + (touchesTop ? safeTop : 0), 0)))
     }
 }
 
@@ -279,10 +291,11 @@ public func goatwebview_clear_cache() {
     }
 }
 
-@_cdecl("goatwebview_set_forward_web_console_to_native_output")
-public func goatwebview_set_forward_web_console_to_native_output(_ enabled: Bool) {
+/// 웹 콘솔 메시지를 OnConsoleMessage로 보낼지 정한다(기본 false). 켠 뒤에 찍힌 메시지부터 보낸다.
+@_cdecl("goatwebview_set_console_message_enabled")
+public func goatwebview_set_console_message_enabled(_ gameObjectName: UnsafePointer<CChar>?, _ enabled: Bool) {
     MainActor.assumeIsolated {
-        WebViewPlugin.setForwardWebConsoleToNativeOutput(enabled)
+        GoatUnityWrapper.wrapper(gameObjectName)?.consoleMessageEnabled = enabled
     }
 }
 
@@ -302,10 +315,10 @@ public func goatwebview_set_fallback_theme(_ gameObjectName: UnsafePointer<CChar
     }
 }
 
-@_cdecl("goatwebview_set_top_safe_area_color")
-public func goatwebview_set_top_safe_area_color(_ gameObjectName: UnsafePointer<CChar>?, _ r: Float, _ g: Float, _ b: Float, _ a: Float) {
+@_cdecl("goatwebview_set_status_bar_color")
+public func goatwebview_set_status_bar_color(_ gameObjectName: UnsafePointer<CChar>?, _ r: Float, _ g: Float, _ b: Float, _ a: Float) {
     MainActor.assumeIsolated {
-        GoatUnityWrapper.wrapper(gameObjectName)?.plugin.setTopSafeAreaColor(r: r, g: g, b: b, a: a)
+        GoatUnityWrapper.wrapper(gameObjectName)?.plugin.setStatusBarColor(r: r, g: g, b: b, a: a)
     }
 }
 

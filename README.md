@@ -70,7 +70,7 @@ Android API 26 이상, compile/target SDK 36, JDK 17을 기준으로 구성했�
 
 iOS는 `native/ios/GoatWebViewSDK.xcworkspace`를 열고 `GoatWebViewSDKSample-SwiftUI` Scheme으로 실행합니다.
 
-- `GoatWebViewSDK`: upstream `plugins/iOS/WebView.mm`을 Swift로 옮긴 UIKit·WebKit Framework. 파일은 Android `webview-sdk`처럼 역할별(`WebViewPlugin`, `WebViewPluginDelegate`, `WebViewConfig` 등)로 나눴습니다. URL/HTML 로드, JavaScript 평가, 탐색, 출처·메인 프레임을 검사하는 `Unity.call` 브리지, 로드 전·실패 시 네이티브 폴백 화면(닫기 버튼), 상단 safe area 색(`setTopSafeAreaColor`)을 제공합니다. 같은 프로젝트의 TestHost 앱에서 XCTest로 검증합니다.
+- `GoatWebViewSDK`: upstream `plugins/iOS/WebView.mm`을 Swift로 옮긴 UIKit·WebKit Framework. 파일은 Android `webview-sdk`처럼 역할별(`WebViewPlugin`, `WebViewPluginDelegate`, `WebViewConfig` 등)로 나눴습니다. URL/HTML 로드, JavaScript 평가, 탐색, 출처·메인 프레임을 검사하는 `Unity.call` 브리지, 로드 전·실패 시 네이티브 폴백 화면(닫기 버튼), 상단 safe area 색(`setStatusBarColor`)을 제공합니다. 같은 프로젝트의 TestHost 앱에서 XCTest로 검증합니다.
 - `GoatWebViewSDKSample-SwiftUI`: SDK 프레임워크를 링크하는 SwiftUI 샘플. LINE SDK SwiftUI 샘플 구성(`ContentView`, `Player/`, `Support/`, `Utils/`, `Config.xcconfig`)을 따르며 플레이어 입력/인증 화면과 문의 웹뷰를 제공합니다.
 - iOS 15 이상, iPhone·iPad, 외부 패키지 의존성 없음.
 

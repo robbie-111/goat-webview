@@ -4,7 +4,7 @@ import UIKit
 
 /// 폴백 화면과 웹뷰를 겹쳐 담는 컨테이너. `setVisibility`와 Unity 래퍼의 `goatwebview_set_frame`은 이 뷰에 적용한다.
 /// 위쪽 safe area(상태바·노치) 중 컨테이너와 겹치는 부분은 항상 비우고, 상단 띠를 켜면 그 영역을 칠한다.
-/// 좌우 safe area(가로 모드 노치)는 피하고, 아래(홈 인디케이터) 뒤는 폴백 화면과 웹뷰가 채운다.
+/// 좌우 safe area는 노치 쪽만 피하고 반대쪽은 채우며(Android가 컷아웃만 피하는 것과 같음), 아래(홈 인디케이터) 뒤는 폴백 화면과 웹뷰가 채운다.
 /// safe area와 겹치지 않는 팝업형 컨테이너는 inset이 0이므로 줄이지 않는다(Android webview-sdk와 같음).
 /// 폴백 화면과 웹뷰는 `contentView`(웹 콘텐츠 영역)에 담는다. `cornerRadii`를 주면 `contentView`만 둥글게 자르고
 /// 상단 띠와 컨테이너는 자르지 않으므로, 풀스크린에서도 상태바 아래 웹 모서리가 둥글게 보인다.
@@ -21,7 +21,7 @@ final class ContainerView: UIView {
         }
     }
 
-    let topSafeAreaView = UIView()
+    let statusBarView = UIView()
     /// 폴백 화면과 웹뷰를 담는 웹 콘텐츠 영역. safe area를 피해 배치하며 모서리 라운딩은 이 뷰를 자른다.
     let contentView = UIView()
     private let cornerMaskLayer = CAShapeLayer()
@@ -30,19 +30,19 @@ final class ContainerView: UIView {
         didSet { setNeedsLayout() }
     }
 
-    var topSafeAreaColor: UIColor? {
+    var statusBarColor: UIColor? {
         didSet {
-            topSafeAreaView.backgroundColor = topSafeAreaColor
-            topSafeAreaView.isHidden = topSafeAreaColor == nil
+            statusBarView.backgroundColor = statusBarColor
+            statusBarView.isHidden = statusBarColor == nil
             setNeedsLayout()
         }
     }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        topSafeAreaView.isHidden = true
+        statusBarView.isHidden = true
         addSubview(contentView)
-        addSubview(topSafeAreaView)
+        addSubview(statusBarView)
     }
 
     @available(*, unavailable)
@@ -59,12 +59,23 @@ final class ContainerView: UIView {
         super.layoutSubviews()
         let insets = safeAreaInsets
         let top = min(insets.top, bounds.height)
-        topSafeAreaView.frame = CGRect(x: 0, y: 0, width: bounds.width, height: top)
-        let contentFrame = CGRect(x: insets.left, y: top,
-                                  width: max(bounds.width - insets.left - insets.right, 0),
+        let side = ContainerView.sideInsets(insets, orientation: window?.windowScene?.interfaceOrientation ?? .unknown)
+        statusBarView.frame = CGRect(x: 0, y: 0, width: bounds.width, height: top)
+        let contentFrame = CGRect(x: side.left, y: top,
+                                  width: max(bounds.width - side.left - side.right, 0),
                                   height: bounds.height - top)
         contentView.frame = contentFrame
         updateCornerMask()
+    }
+
+    /// 가로 모드에서 UIKit은 노치 양쪽에 같은 inset을 준다. Android(컷아웃만 피함)처럼 노치 쪽만 비우고 반대쪽은 채운다.
+    /// landscapeLeft는 홈 버튼이 왼쪽(노치 오른쪽), landscapeRight는 홈 버튼이 오른쪽(노치 왼쪽)이다.
+    static func sideInsets(_ insets: UIEdgeInsets, orientation: UIInterfaceOrientation) -> (left: CGFloat, right: CGFloat) {
+        switch orientation {
+        case .landscapeLeft: return (0, insets.right)
+        case .landscapeRight: return (insets.left, 0)
+        default: return (insets.left, insets.right)
+        }
     }
 
     // 웹 콘텐츠 영역을 자른다. 네 값이 같으면 레이어 속성만으로, 다르면 모서리별 원호로 만든 마스크로 자른다.
