@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- External Dependency Manager(EDM4U)가 읽는 Android 의존성.
+     GoatWebViewSDK.aar·GoatWebViewUnity.aar는 의존성을 품지 않으므로 Kotlin 표준 라이브러리와 AndroidX를 여기서 선언한다.
+     버전은 native/android/gradle/libs.versions.toml(kotlin 2.2.10, webkit 1.15.0, core 1.17.0)과 맞춘다.
+     iOS는 Swift 소스를 UnityFramework에서 함께 컴파일하므로 iosPods가 없다. -->
+<dependencies>
+  <androidPackages>
+    <androidPackage spec="org.jetbrains.kotlin:kotlin-stdlib:2.2.10" />
+    <androidPackage spec="androidx.webkit:webkit:1.15.0" />
+    <androidPackage spec="androidx.core:core-ktx:1.17.0" />
+  </androidPackages>
+</dependencies>
