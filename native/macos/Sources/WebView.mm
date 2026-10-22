@@ -226,6 +226,71 @@ window.Unity = { \
         WKUserScript *script = [[WKUserScript alloc] initWithSource:str injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES];
         [controller addUserScript:script];
     }
+    // 웹 콘솔(console.debug/log/info/warn/error)과 잡히지 않은 예외를 OnConsoleMessage로 보낸다(iOS SDK의 consoleScript와 같다).
+    // Android onConsoleMessage처럼 iframe 것도 받는다. 전송 여부는 C#(GoatWebViewEditorView)이 거른다.
+    [controller addScriptMessageHandler:[[GoatWeakScriptMessageDelegate alloc] initWithDelegate:self] name:@"goatConsole"];
+    {
+        NSString *str =
+        @"(function() {\n"
+        @"    var handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.goatConsole;\n"
+        @"    if (!handler || window.__goatConsoleInstalled)\n"
+        @"        return;\n"
+        @"    window.__goatConsoleInstalled = true;\n"
+        @"    var sending = false;\n"
+        @"    function text(value) {\n"
+        @"        if (typeof value === 'string')\n"
+        @"            return value;\n"
+        @"        if (value instanceof Error)\n"
+        @"            return String(value);\n"
+        @"        if (value !== null && typeof value === 'object') {\n"
+        @"            try {\n"
+        @"                var json = JSON.stringify(value);\n"
+        @"                if (json !== undefined)\n"
+        @"                    return json;\n"
+        @"            } catch (e) {}\n"
+        @"        }\n"
+        @"        return String(value);\n"
+        @"    }\n"
+        @"    function callerLocation(stack) {\n"
+        @"        var lines = String(stack || '').split('\\n');\n"
+        @"        for (var i = 0; i < lines.length; i++) {\n"
+        @"            var match = lines[i].match(/([a-z][a-z0-9+.-]*:[^@\\s]*):(\\d+):\\d+$/i);\n"
+        @"            if (match && match[1].indexOf('user-script:') !== 0)\n"
+        @"                return { source: match[1], line: Number(match[2]) };\n"
+        @"        }\n"
+        @"        return { source: window.location.href, line: 0 };\n"
+        @"    }\n"
+        @"    function send(level, message, source, line) {\n"
+        @"        if (sending)\n"
+        @"            return;\n"
+        @"        sending = true;\n"
+        @"        try {\n"
+        @"            handler.postMessage({ level: level, message: message, source: source, line: line });\n"
+        @"        } catch (e) {\n"
+        @"        } finally {\n"
+        @"            sending = false;\n"
+        @"        }\n"
+        @"    }\n"
+        @"    var levels = { debug: 'DEBUG', log: 'LOG', info: 'LOG', warn: 'WARNING', error: 'ERROR' };\n"
+        @"    Object.keys(levels).forEach(function(name) {\n"
+        @"        var original = console[name];\n"
+        @"        console[name] = function() {\n"
+        @"            if (typeof original === 'function')\n"
+        @"                original.apply(console, arguments);\n"
+        @"            var where = callerLocation(new Error().stack);\n"
+        @"            send(levels[name], Array.prototype.map.call(arguments, text).join(' '), where.source, where.line);\n"
+        @"        };\n"
+        @"    });\n"
+        @"    window.addEventListener('error', function(event) {\n"
+        @"        send('ERROR', event.message || text(event.error), event.filename || window.location.href, event.lineno || 0);\n"
+        @"    });\n"
+        @"    window.addEventListener('unhandledrejection', function(event) {\n"
+        @"        send('ERROR', 'Unhandled promise rejection: ' + text(event.reason), window.location.href, 0);\n"
+        @"    });\n"
+        @"})();\n";
+        WKUserScript *script = [[WKUserScript alloc] initWithSource:str injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO];
+        [controller addUserScript:script];
+    }
     if (!zoom) {
         NSString *str = @"\
 (function() { \
@@ -295,6 +360,7 @@ window.Unity = { \
             webView0.UIDelegate = nil;
             webView0.navigationDelegate = nil;
             [((WKWebView *)webView0).configuration.userContentController removeScriptMessageHandlerForName:@"unityControl"];
+            [((WKWebView *)webView0).configuration.userContentController removeScriptMessageHandlerForName:@"goatConsole"];
             [webView0 stopLoading];
             [webView0 removeObserver:self forKeyPath:@"loading"];
         }
@@ -549,6 +615,24 @@ window.Unity = { \
 - (void)userContentController:(WKUserContentController *)userContentController
       didReceiveScriptMessage:(WKScriptMessage *)message {
 
+    if ([message.name isEqualToString:@"goatConsole"]) {
+        // iOS WebViewConsoleMessage(body:)와 같은 검사. level·message가 맞지 않으면 버린다.
+        if (![message.body isKindOfClass:[NSDictionary class]])
+            return;
+        NSDictionary *body = message.body;
+        NSString *level = body[@"level"];
+        NSString *text = body[@"message"];
+        if (![level isKindOfClass:[NSString class]] || ![text isKindOfClass:[NSString class]])
+            return;
+        if (![@[@"DEBUG", @"LOG", @"WARNING", @"ERROR"] containsObject:level])
+            return;
+        NSString *source = [body[@"source"] isKindOfClass:[NSString class]] ? body[@"source"] : @"";
+        NSNumber *line = [body[@"line"] isKindOfClass:[NSNumber class]] ? body[@"line"] : @0;
+        [self sendMessage:@"OnConsoleMessage" fields:@{@"level": level, @"message": text, @"source": source, @"line": line}];
+        return;
+    }
+    if (![message.name isEqualToString:@"unityControl"])
+        return;
     // Log out the message received
     //NSLog(@"Received event %@", message.body);
     if (![message.body isKindOfClass:[NSString class]])

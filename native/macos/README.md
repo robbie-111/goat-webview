@@ -51,6 +51,7 @@ C#에서는 `[DllImport("GoatWebView")]`로 부릅니다. 함수 이름과 인�
 | `OnPageFinished` | `{"url", "statusCode"}`. 메인 문서 HTTP 오류 상태, 없으면 200 | `CallOnLoaded` + `CallOnHttpError` |
 | `OnLoadingErrorReceived` | `{"kind", "errorCode", "errorMessage", "url"}`. 로드 실패는 `NETWORK`(`NSError.code`), 웹 콘텐츠 프로세스 종료·창 닫힘은 `RENDERER`(-1) | `CallOnError` |
 | `OnMessageReceived` | `{"message", "origin"}`. `Unity.call(msg)`, `unityControl.postMessage(msg)`(문자열만), `unity:` 스킴 | `CallFromJS` |
+| `OnConsoleMessage` | `{"level", "message", "source", "line"}`. iOS SDK와 같은 콘솔 스크립트(`goatConsole` 핸들러)로 받은 웹 콘솔. 켜기 전에는 C#(`GoatWebViewEditorView`)이 버립니다 | 없음 |
 | `OnJavaScriptResult` | `{"requestId", "result"}`. `result`는 JSON 문자열이며 결과가 없으면 null | 없음 |
 | `CallOnHooked`, `CallOnCookies` | 문자열 그대로 | 그대로 |
 
