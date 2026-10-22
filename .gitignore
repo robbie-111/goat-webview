@@ -16,3 +16,16 @@ native/windows/bin/
 native/windows/packages/
 native/windows/.vs/
 native/windows/nuget.exe
+
+# Unity 샘플 프로젝트(unity/SampleProject)가 생성하는 폴더와 IDE 파일
+/unity/SampleProject/[Ll]ibrary/
+/unity/SampleProject/[Tt]emp/
+/unity/SampleProject/[Oo]bj/
+/unity/SampleProject/[Bb]uild/
+/unity/SampleProject/[Bb]uilds/
+/unity/SampleProject/[Ll]ogs/
+/unity/SampleProject/[Uu]ser[Ss]ettings/
+/unity/SampleProject/[Mm]emoryCaptures/
+/unity/SampleProject/[Rr]ecordings/
+/unity/SampleProject/*.csproj
+/unity/SampleProject/*.sln
